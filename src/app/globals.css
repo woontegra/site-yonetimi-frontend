@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --header-height: 60px;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: #f3f5f7;
+  color: #1b2430;
+}
+
+*:focus-visible {
+  outline: 2px solid #1e5aab;
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #e8f0fa;
+  color: #1b2430;
+}
