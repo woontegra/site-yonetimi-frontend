@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { EmployeesPage } from "@/components/employees/EmployeesPage";
 
 export default function CalisanlarPage() {
-  return (
-    <ModulePlaceholder
-      title="Çalışanlar"
-      actionLabel="Yeni Çalışan"
-      searchPlaceholder="Çalışan ara..."
-    />
-  );
+  return <EmployeesPage />;
 }

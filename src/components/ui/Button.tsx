@@ -10,8 +10,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-hover shadow-sm",
-  secondary: "bg-white text-ink border border-line hover:bg-canvas",
+  primary: "bg-accent text-white hover:bg-accent-hover shadow-sm",
+  secondary: "bg-surface text-ink border border-line hover:bg-canvas",
   ghost: "bg-transparent text-ink hover:bg-canvas",
   danger: "bg-danger text-white hover:bg-red-700",
 };
@@ -32,7 +32,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors duration-micro disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md text-center font-medium leading-none transition-colors duration-micro disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],
         className,

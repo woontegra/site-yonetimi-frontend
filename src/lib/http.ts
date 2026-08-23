@@ -13,20 +13,27 @@ export class ApiError extends Error {
 type ApiRequestOptions = RequestInit & {
   token?: string | null;
   tenantId?: string | null;
+  siteId?: string | null;
 };
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { token, tenantId, headers, ...rest } = options;
+  const { token, tenantId, siteId, headers, ...rest } = options;
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(tenantId ? { "X-Tenant-Id": tenantId } : {}),
-      ...headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(tenantId ? { "X-Tenant-Id": tenantId } : {}),
+        ...(siteId ? { "X-Site-Id": siteId } : {}),
+        ...headers,
+      },
+    });
+  } catch {
+    throw new ApiError(0, "Sunucuya bağlanılamadı. API ve veritabanının çalıştığını kontrol edin.");
+  }
 
   if (response.status === 204) {
     return undefined as T;

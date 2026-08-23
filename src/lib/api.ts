@@ -6,7 +6,8 @@ type LoginResponse = {
     id: string;
     email: string;
     fullName: string;
-    tenants?: Array<{ name: string }>;
+    isPlatformAdmin?: boolean;
+    tenants?: Array<{ id?: string; name: string }>;
   };
 };
 
@@ -29,6 +30,45 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
   }
 
   return (await response.json()) as LoginResponse;
+}
+
+export async function apiPeekActivation(token: string): Promise<{
+  valid: boolean;
+  reason?: string;
+  fullName?: string;
+  emailMasked?: string;
+  expiresAt?: string;
+}> {
+  if (!token) return { valid: false, reason: "invalid" };
+  const response = await fetch(`${API_URL}/api/auth/activation?token=${encodeURIComponent(token)}`);
+  if (!response.ok) {
+    return { valid: false, reason: "invalid" };
+  }
+  return (await response.json()) as {
+    valid: boolean;
+    reason?: string;
+    fullName?: string;
+    emailMasked?: string;
+    expiresAt?: string;
+  };
+}
+
+export async function apiActivate(token: string, password: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/auth/activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!response.ok) {
+    let message = "Hesap etkinleştirilemedi.";
+    try {
+      const data = (await response.json()) as { message?: string };
+      if (data.message) message = data.message;
+    } catch {
+      /* boş */
+    }
+    throw new Error(message);
+  }
 }
 
 export async function apiLogout(token: string): Promise<void> {

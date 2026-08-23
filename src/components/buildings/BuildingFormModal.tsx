@@ -1,32 +1,42 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Building2, Check, Pencil } from "lucide-react";
+import { ProvinceDistrictFields } from "@/components/location/ProvinceDistrictFields";
+import { SiteContextField } from "@/components/sites/SiteContextField";
+import { SiteSelect } from "@/components/sites/SiteSelect";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { FormModal } from "@/components/ui/FormModal";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
+import { useCloseFormOnSiteChange } from "@/hooks/useCloseFormOnSiteChange";
+import { useActiveSite } from "@/lib/active-site-context";
+import { hasCustomBuildingAddress } from "@/lib/building-address";
 import type { Building, BuildingPayload } from "@/lib/buildings-api";
 
 export type BuildingFormValues = {
+  siteId: string;
   name: string;
   code: string;
   apartmentCount: string;
   floorCount: string;
+  useCustomAddress: boolean;
   city: string;
   district: string;
   address: string;
   description: string;
 };
 
-export function emptyBuildingForm(): BuildingFormValues {
+export function emptyBuildingForm(siteId = ""): BuildingFormValues {
   return {
+    siteId,
     name: "",
     code: "",
     apartmentCount: "",
     floorCount: "",
+    useCustomAddress: false,
     city: "",
     district: "",
     address: "",
@@ -34,58 +44,84 @@ export function emptyBuildingForm(): BuildingFormValues {
   };
 }
 
-export function buildingToForm(building: Building): BuildingFormValues {
+export function buildingToForm(building: Building, siteId = ""): BuildingFormValues {
+  const useCustomAddress = hasCustomBuildingAddress(building);
   return {
+    siteId,
     name: building.name,
     code: building.code ?? "",
-    apartmentCount: String(building.apartmentCount),
-    floorCount: String(building.floorCount),
-    city: building.city ?? "",
-    district: building.district ?? "",
-    address: building.address ?? "",
+    apartmentCount: building.apartmentCount != null ? String(building.apartmentCount) : "",
+    floorCount: building.floorCount != null ? String(building.floorCount) : "",
+    useCustomAddress,
+    city: useCustomAddress ? (building.city ?? "") : "",
+    district: useCustomAddress ? (building.district ?? "") : "",
+    address: useCustomAddress ? (building.address ?? "") : "",
     description: building.description ?? "",
   };
 }
 
-export function validateBuildingForm(values: BuildingFormValues): Record<string, string> {
+export function validateBuildingForm(
+  values: BuildingFormValues,
+  options?: { requireSite?: boolean },
+): Record<string, string> {
   const errors: Record<string, string> = {};
+  if (options?.requireSite !== false && !values.siteId) {
+    errors.siteId = "Site seçimi zorunludur.";
+  }
 
   if (!values.name.trim()) {
     errors.name = "Bina adı zorunludur.";
   }
 
-  const apartments = Number(values.apartmentCount);
-  if (values.apartmentCount.trim() === "") {
-    errors.apartmentCount = "Daire sayısı zorunludur.";
-  } else if (!Number.isInteger(apartments)) {
-    errors.apartmentCount = "Daire sayısı tam sayı olmalıdır.";
-  } else if (apartments <= 0) {
-    errors.apartmentCount = "Daire sayısı 0'dan büyük olmalıdır.";
+  if (values.apartmentCount.trim() !== "") {
+    const apartments = Number(values.apartmentCount);
+    if (!Number.isInteger(apartments)) {
+      errors.apartmentCount = "Daire sayısı tam sayı olmalıdır.";
+    } else if (apartments <= 0) {
+      errors.apartmentCount = "Daire sayısı 0'dan büyük olmalıdır.";
+    }
   }
 
-  const floors = Number(values.floorCount);
-  if (values.floorCount.trim() === "") {
-    errors.floorCount = "Kat sayısı zorunludur.";
-  } else if (!Number.isInteger(floors)) {
-    errors.floorCount = "Kat sayısı tam sayı olmalıdır.";
-  } else if (floors <= 0) {
-    errors.floorCount = "Kat sayısı 0'dan büyük olmalıdır.";
+  if (values.floorCount.trim() !== "") {
+    const floors = Number(values.floorCount);
+    if (!Number.isInteger(floors)) {
+      errors.floorCount = "Kat sayısı tam sayı olmalıdır.";
+    } else if (floors <= 0) {
+      errors.floorCount = "Kat sayısı 0'dan büyük olmalıdır.";
+    }
   }
 
   return errors;
 }
 
-export function formToPayload(values: BuildingFormValues): BuildingPayload {
-  return {
+export function formToPayload(
+  values: BuildingFormValues,
+  options?: { clearInheritedAddress?: boolean },
+): BuildingPayload {
+  const payload: BuildingPayload = {
     name: values.name.trim(),
-    apartmentCount: Number(values.apartmentCount),
-    floorCount: Number(values.floorCount),
+    apartmentCount: values.apartmentCount.trim()
+      ? Number(values.apartmentCount)
+      : null,
+    floorCount: values.floorCount.trim() ? Number(values.floorCount) : null,
     ...(values.code.trim() ? { code: values.code.trim() } : {}),
-    ...(values.city.trim() ? { city: values.city.trim() } : {}),
-    ...(values.district.trim() ? { district: values.district.trim() } : {}),
-    ...(values.address.trim() ? { address: values.address.trim() } : {}),
     ...(values.description.trim() ? { description: values.description.trim() } : {}),
   };
+
+  if (values.useCustomAddress) {
+    payload.city = values.city.trim() || null;
+    payload.district = values.district.trim() || null;
+    payload.address = values.address.trim() || null;
+    return payload;
+  }
+
+  if (options?.clearInheritedAddress) {
+    payload.city = null;
+    payload.district = null;
+    payload.address = null;
+  }
+
+  return payload;
 }
 
 type BuildingFormModalProps = {
@@ -94,6 +130,9 @@ type BuildingFormModalProps = {
   initialValues: BuildingFormValues;
   pending: boolean;
   error?: string;
+  /** Site detayından açıldığında site kilitli */
+  lockSite?: boolean;
+  siteLabel?: string;
   onClose: () => void;
   onSubmit: (values: BuildingFormValues) => Promise<void>;
 };
@@ -104,18 +143,27 @@ export function BuildingFormModal({
   initialValues,
   pending,
   error,
+  lockSite = false,
+  siteLabel,
   onClose,
   onSubmit,
 }: BuildingFormModalProps) {
+  const { site, sites } = useActiveSite();
   const [values, setValues] = useState<BuildingFormValues>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isEdit = title.toLocaleLowerCase("tr").includes("düzenle");
+
+  const handleClose = useCallback(() => {
+    if (!pending) onClose();
+  }, [pending, onClose]);
+
+  useCloseFormOnSiteChange(open, handleClose);
 
   useEffect(() => {
     if (!open) return;
     setValues(initialValues);
     setErrors({});
-  }, [open]);
+  }, [open, initialValues]);
 
   function update<K extends keyof BuildingFormValues>(key: K, value: BuildingFormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -131,12 +179,18 @@ export function BuildingFormModal({
     event.preventDefault();
     if (pending) return;
 
-    const nextErrors = validateBuildingForm(values);
+    const nextErrors = validateBuildingForm(values, { requireSite: !isEdit });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     await onSubmit(values);
   }
+
+  const lockedSiteName =
+    siteLabel ||
+    sites.find((s) => s.id === values.siteId)?.name ||
+    site?.name ||
+    "—";
 
   return (
     <FormModal
@@ -151,7 +205,7 @@ export function BuildingFormModal({
       onClose={pending ? () => undefined : onClose}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>
+          <Button variant="secondary" onClick={onClose} disabled={pending}>
             İptal
           </Button>
           <Button type="submit" form="building-form" disabled={pending}>
@@ -168,17 +222,30 @@ export function BuildingFormModal({
       }
     >
       <form id="building-form" onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
+        <FormSection title="Site">
+          {isEdit || lockSite ? (
+            <SiteContextField value={lockedSiteName} hint="Bina bu siteye aittir." />
+          ) : (
+            <SiteSelect
+              value={values.siteId}
+              onChange={(siteId) => update("siteId", siteId)}
+              error={errors.siteId}
+              autoFocus
+            />
+          )}
+        </FormSection>
+
         <FormSection title="Bina bilgileri">
           <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
             <FormField label="Bina Adı" htmlFor="building-name" required error={errors.name}>
               <Input
                 id="building-name"
-                data-modal-autofocus
+                data-modal-autofocus={isEdit || lockSite || undefined}
                 value={values.name}
                 invalid={Boolean(errors.name)}
                 onChange={(event) => update("name", event.target.value)}
                 autoComplete="off"
-                placeholder="Örn. Hanlılar Sitesi"
+                placeholder="Örn. A Blok"
               />
             </FormField>
             <FormField label="Bina Kodu" htmlFor="building-code">
@@ -187,57 +254,27 @@ export function BuildingFormModal({
                 value={values.code}
                 onChange={(event) => update("code", event.target.value)}
                 autoComplete="off"
-                placeholder="Örn. A Blok"
+                placeholder="Örn. A"
               />
             </FormField>
-            <FormField label="Daire Sayısı" htmlFor="building-apartments" required error={errors.apartmentCount}>
+            <FormField label="Daire Sayısı" htmlFor="building-apartments" error={errors.apartmentCount}>
               <Input
                 id="building-apartments"
                 inputMode="numeric"
                 value={values.apartmentCount}
                 invalid={Boolean(errors.apartmentCount)}
                 onChange={(event) => update("apartmentCount", event.target.value)}
-                placeholder="0"
+                placeholder="Opsiyonel"
               />
             </FormField>
-            <FormField label="Kat Sayısı" htmlFor="building-floors" required error={errors.floorCount}>
+            <FormField label="Kat Sayısı" htmlFor="building-floors" error={errors.floorCount}>
               <Input
                 id="building-floors"
                 inputMode="numeric"
                 value={values.floorCount}
                 invalid={Boolean(errors.floorCount)}
                 onChange={(event) => update("floorCount", event.target.value)}
-                placeholder="0"
-              />
-            </FormField>
-          </div>
-        </FormSection>
-
-        <FormSection title="Konum">
-          <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
-            <FormField label="İl" htmlFor="building-city">
-              <Input
-                id="building-city"
-                value={values.city}
-                onChange={(event) => update("city", event.target.value)}
-                autoComplete="address-level1"
-              />
-            </FormField>
-            <FormField label="İlçe" htmlFor="building-district">
-              <Input
-                id="building-district"
-                value={values.district}
-                onChange={(event) => update("district", event.target.value)}
-                autoComplete="address-level2"
-              />
-            </FormField>
-            <FormField label="Adres" htmlFor="building-address" className="md:col-span-2">
-              <Textarea
-                id="building-address"
-                rows={3}
-                className="min-h-[76px]"
-                value={values.address}
-                onChange={(event) => update("address", event.target.value)}
+                placeholder="Opsiyonel"
               />
             </FormField>
           </div>
@@ -253,6 +290,47 @@ export function BuildingFormModal({
               onChange={(event) => update("description", event.target.value)}
             />
           </FormField>
+
+          <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13px] text-ink">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 rounded border-line text-brand focus:ring-brand/30"
+              checked={values.useCustomAddress}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setValues((current) => ({
+                  ...current,
+                  useCustomAddress: checked,
+                  ...(checked
+                    ? {}
+                    : { city: "", district: "", address: "" }),
+                }));
+              }}
+            />
+            <span>Bina adresi site adresinden farklı</span>
+          </label>
+
+          {values.useCustomAddress ? (
+            <div className="mt-3 grid grid-cols-1 gap-x-4 md:grid-cols-2">
+              <ProvinceDistrictFields
+                city={values.city}
+                district={values.district}
+                cityId="building-city"
+                districtId="building-district"
+                onCityChange={(city) => update("city", city)}
+                onDistrictChange={(district) => update("district", district)}
+              />
+              <FormField label="Adres" htmlFor="building-address" className="md:col-span-2">
+                <Textarea
+                  id="building-address"
+                  rows={3}
+                  className="min-h-[76px]"
+                  value={values.address}
+                  onChange={(event) => update("address", event.target.value)}
+                />
+              </FormField>
+            </div>
+          ) : null}
         </FormSection>
 
         {error ? (

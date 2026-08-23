@@ -38,7 +38,7 @@ export function ConfirmDialog({
       onClose={pending ? () => undefined : onClose}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={pending} data-modal-autofocus>
+          <Button variant="secondary" onClick={onClose} disabled={pending} data-modal-autofocus>
             {cancelLabel}
           </Button>
           <Button variant={danger ? "danger" : "primary"} onClick={onConfirm} disabled={pending}>

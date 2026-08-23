@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { FeedbackPage } from "@/components/feedback/FeedbackPage";
 
 export default function BilgiOneriPage() {
-  return (
-    <ModulePlaceholder
-      title="Bilgi ve Öneriler"
-      actionLabel="Yeni Kayıt"
-      searchPlaceholder="Kayıt ara..."
-    />
-  );
+  return <FeedbackPage />;
 }

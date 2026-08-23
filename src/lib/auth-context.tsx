@@ -35,6 +35,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hydrate = useCallback(async () => {
     try {
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        if (path.startsWith("/giris") || path.startsWith("/aktivasyon")) {
+          const existingPublic = readSession();
+          if (existingPublic?.token) {
+            setUser(existingPublic.user);
+            setToken(existingPublic.token);
+            setTenantId(existingPublic.user.tenantId ?? null);
+          }
+          setReady(true);
+          return;
+        }
+        const existing = readSession();
+        if (existing?.token && existing.user.id !== "preview") {
+          setUser(existing.user);
+          setToken(existing.token);
+          setTenantId(existing.user.tenantId ?? null);
+          setReady(true);
+          return;
+        }
+      }
       const session = await fetchPreviewSession();
       const nextUser: SessionUser = {
         id: session.user.id,
@@ -42,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fullName: session.user.fullName,
         tenantId: session.user.tenants?.[0]?.id,
         tenantName: session.user.tenants?.[0]?.name,
+        isPlatformAdmin: Boolean(session.user.isPlatformAdmin),
       };
       writeSession({ token: session.token, user: nextUser });
       setUser(nextUser);

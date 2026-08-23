@@ -94,7 +94,7 @@ export function Dropdown({
               role="menu"
               style={{ top: position.top, left: position.left }}
               className={cn(
-                "fixed z-50 min-w-[160px] rounded-md border border-line bg-white py-1 shadow-menu",
+                "fixed z-50 min-w-[160px] rounded-md border border-line bg-surface py-1 shadow-menu",
                 menuClassName,
               )}
             >

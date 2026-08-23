@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { SuppliersPage } from "@/components/suppliers/SuppliersPage";
 
 export default function TedarikcilerPage() {
-  return (
-    <ModulePlaceholder
-      title="Tedarikçiler"
-      actionLabel="Yeni Tedarikçi"
-      searchPlaceholder="Tedarikçi ara..."
-    />
-  );
+  return <SuppliersPage />;
 }

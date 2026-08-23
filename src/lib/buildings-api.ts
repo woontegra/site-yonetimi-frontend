@@ -7,8 +7,9 @@ export type Building = {
   address: string | null;
   city: string | null;
   district: string | null;
-  apartmentCount: number;
-  floorCount: number;
+  apartmentCount: number | null;
+  registeredApartmentCount?: number;
+  floorCount: number | null;
   description: string | null;
   isActive: boolean;
   createdAt: string;
@@ -25,12 +26,12 @@ export type BuildingListResponse = {
 export type BuildingPayload = {
   name: string;
   code?: string;
-  address?: string;
-  city?: string;
-  district?: string;
+  address?: string | null;
+  city?: string | null;
+  district?: string | null;
   description?: string;
-  apartmentCount: number;
-  floorCount: number;
+  apartmentCount?: number | null;
+  floorCount?: number | null;
 };
 
 type SessionResponse = {
@@ -39,6 +40,7 @@ type SessionResponse = {
     id: string;
     email: string;
     fullName: string;
+    isPlatformAdmin?: boolean;
     tenants?: Array<{ id: string; name: string }>;
   };
 };
@@ -46,6 +48,7 @@ type SessionResponse = {
 type AuthContext = {
   token: string;
   tenantId: string;
+  siteId?: string | null;
 };
 
 export function fetchPreviewSession() {

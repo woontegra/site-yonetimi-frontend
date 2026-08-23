@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { AssetsPage } from "@/components/assets/AssetsPage";
 
 export default function DemirbaslarPage() {
-  return (
-    <ModulePlaceholder
-      title="Demirbaşlar"
-      actionLabel="Yeni Demirbaş"
-      searchPlaceholder="Demirbaş ara..."
-    />
-  );
+  return <AssetsPage />;
 }

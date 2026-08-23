@@ -11,14 +11,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Site Yönetim",
+  title: "Woontegra Site Yönetimi",
   description: "Site ve apartman yönetim uygulaması",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="tr">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${inter.className} font-sans antialiased font-normal`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

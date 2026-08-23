@@ -6,6 +6,7 @@ export type SessionUser = {
   fullName: string;
   tenantId?: string;
   tenantName?: string;
+  isPlatformAdmin?: boolean;
 };
 
 export type SessionState = {

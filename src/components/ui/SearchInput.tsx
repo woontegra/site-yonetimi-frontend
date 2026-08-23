@@ -7,7 +7,7 @@ type SearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
 export function SearchInput({ className, ...props }: SearchInputProps) {
   return (
-    <label className="relative block w-full shrink-0 md:w-[240px]">
+    <label className="relative block w-full min-w-0">
       <Search
         className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted"
         aria-hidden

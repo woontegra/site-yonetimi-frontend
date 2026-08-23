@@ -17,10 +17,10 @@ export function UserMenu() {
           aria-haspopup="menu"
           aria-label="Kullanıcı menüsü"
         >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-semibold text-accent">
             {user.fullName.charAt(0).toUpperCase()}
           </span>
-          <span className="hidden truncate font-medium md:inline">{user.fullName}</span>
+          <span className="hidden truncate font-normal lg:inline">{user.fullName}</span>
           <ChevronDown className="size-3.5 text-muted" aria-hidden />
         </button>
       }

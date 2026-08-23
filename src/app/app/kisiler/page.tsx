@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { PersonsPage } from "@/components/persons/PersonsPage";
 
-export default function KisilerPage() {
-  return (
-    <ModulePlaceholder
-      title="Kişiler"
-      actionLabel="Yeni Kişi"
-      searchPlaceholder="Kişi ara..."
-    />
-  );
+export default function KisilerRoute() {
+  return <PersonsPage />;
 }

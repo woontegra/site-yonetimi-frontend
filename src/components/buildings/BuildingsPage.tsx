@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,6 +12,8 @@ import {
   type BuildingFormValues,
 } from "@/components/buildings/BuildingFormModal";
 import { BuildingsTable } from "@/components/buildings/BuildingsTable";
+import { NeedSiteDialog } from "@/components/sites/NeedSiteDialog";
+import { useSiteSetupWizard } from "@/components/setup/SiteSetupProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Pagination } from "@/components/ui/Pagination";
@@ -19,6 +21,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/Toast";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
+import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
 import { ApiError } from "@/lib/http";
 import {
   createBuilding,
@@ -31,12 +34,11 @@ import {
 const PER_PAGE = 20;
 
 export function BuildingsPage() {
-  const { ready, token, tenantId } = useAuth();
+  const { ready } = useAuth();
   const { showToast } = useToast();
-  const auth = useMemo(
-    () => (token && tenantId ? { token, tenantId } : null),
-    [token, tenantId],
-  );
+  const auth = useApiAuth({ requireSite: true });
+  const { site, siteId, hasSites, status } = useActiveSite();
+  const { openWizard } = useSiteSetupWizard();
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -50,14 +52,18 @@ export function BuildingsPage() {
   const [editing, setEditing] = useState<Building | null>(null);
   const [formPending, setFormPending] = useState(false);
   const [formError, setFormError] = useState("");
+  const [needSiteOpen, setNeedSiteOpen] = useState(false);
 
   const [deleting, setDeleting] = useState<Building | null>(null);
   const [deletePending, setDeletePending] = useState(false);
 
   const load = useCallback(async () => {
-    if (!auth) {
-      setLoading(false);
-      setListError("Sunucuya bağlanılamadı.");
+    // Bootstrap bitmeden veya activeSite yokken istek atma / "site yok" empty state gösterme.
+    if (status === "loading" || !auth || !siteId) {
+      setLoading(true);
+      setItems([]);
+      setTotal(0);
+      setListError("");
       return;
     }
 
@@ -78,18 +84,22 @@ export function BuildingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [auth, debouncedSearch, page]);
+  }, [auth, siteId, status, debouncedSearch, page]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || status === "loading") return;
     void load();
-  }, [ready, load]);
+  }, [ready, status, load]);
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, siteId]);
 
   function openCreate() {
+    if (!hasSites || !siteId) {
+      setNeedSiteOpen(true);
+      return;
+    }
     setEditing(null);
     setFormError("");
     setFormOpen(true);
@@ -103,15 +113,21 @@ export function BuildingsPage() {
 
   async function handleSubmit(values: BuildingFormValues) {
     if (!auth || formPending) return;
+    const targetSiteId = editing ? siteId : values.siteId;
+    if (!targetSiteId) {
+      setFormError("Site seçimi zorunludur.");
+      return;
+    }
     setFormPending(true);
     setFormError("");
     try {
-      const payload = formToPayload(values);
+      const payload = formToPayload(values, { clearInheritedAddress: Boolean(editing) });
+      const authForSite = { ...auth, siteId: targetSiteId };
       if (editing) {
-        await updateBuilding(auth, editing.id, payload);
+        await updateBuilding(authForSite, editing.id, payload);
         showToast("Bina güncellendi.");
       } else {
-        await createBuilding(auth, payload);
+        await createBuilding(authForSite, payload);
         showToast("Bina oluşturuldu.");
       }
       setFormOpen(false);
@@ -143,6 +159,9 @@ export function BuildingsPage() {
     <PageContainer>
       <PageHeader
         title="Binalar"
+        description={
+          site?.name ? `${site.name} için bina ve blokları yönetin.` : "Bina ve blokları yönetin."
+        }
         search={
           <SearchInput
             placeholder="Bina ara..."
@@ -161,19 +180,45 @@ export function BuildingsPage() {
 
       {listError ? <p className="mb-3 text-sm text-danger">{listError}</p> : null}
 
-      <BuildingsTable items={items} loading={loading} onEdit={openEdit} onDelete={setDeleting} />
+      <BuildingsTable
+        items={items}
+        loading={loading}
+        emptyLabel={
+          hasSites
+            ? "Bu site için henüz bina/blok oluşturulmamış."
+            : "Henüz bina bulunmuyor."
+        }
+        onEdit={openEdit}
+        onDelete={setDeleting}
+      />
+
+      {!loading && hasSites && items.length === 0 && !listError ? (
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <Button onClick={openCreate}>Bina Oluştur</Button>
+          <Button variant="secondary" onClick={() => openWizard()}>
+            Site Kurulumunu Tamamla
+          </Button>
+        </div>
+      ) : null}
       <Pagination page={page} perPage={PER_PAGE} total={total} onPageChange={setPage} />
 
       <BuildingFormModal
         key={editing?.id ?? "create"}
         open={formOpen}
         title={editing ? "Binayı Düzenle" : "Yeni Bina"}
-        initialValues={editing ? buildingToForm(editing) : emptyBuildingForm()}
+        initialValues={
+          editing
+            ? buildingToForm(editing, siteId ?? "")
+            : emptyBuildingForm(siteId ?? "")
+        }
         pending={formPending}
         error={formError}
+        siteLabel={site?.name}
         onClose={() => (formPending ? undefined : setFormOpen(false))}
         onSubmit={handleSubmit}
       />
+
+      <NeedSiteDialog open={needSiteOpen} onClose={() => setNeedSiteOpen(false)} />
 
       <ConfirmDialog
         open={Boolean(deleting)}

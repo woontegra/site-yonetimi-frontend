@@ -1,11 +1,5 @@
-import { ModulePlaceholder } from "@/components/layout/ModulePlaceholder";
+import { ApartmentsPage } from "@/components/apartments/ApartmentsPage";
 
-export default function DairelerPage() {
-  return (
-    <ModulePlaceholder
-      title="Daireler"
-      actionLabel="Yeni Daire"
-      searchPlaceholder="Daire ara..."
-    />
-  );
+export default function DairelerRoute() {
+  return <ApartmentsPage />;
 }

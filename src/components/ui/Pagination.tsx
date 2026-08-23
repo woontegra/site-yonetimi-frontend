@@ -16,7 +16,7 @@ export function Pagination({ page, perPage, total, onPageChange }: PaginationPro
 
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-      <p className="text-sm text-muted">
+      <p className="text-caption text-muted">
         {start}–{end} / {total} kayıt
       </p>
       <div className="flex items-center gap-2">

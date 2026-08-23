@@ -12,7 +12,7 @@ import { X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export type ModalVariant = "form" | "confirm" | "detail";
-export type ModalSize = "sm" | "md" | "lg";
+export type ModalSize = "sm" | "md" | "lg" | "xl" | "full" | "small" | "medium" | "large" | "wide";
 
 export type ModalProps = {
   open: boolean;
@@ -29,9 +29,15 @@ export type ModalProps = {
 };
 
 const sizes: Record<ModalSize, string> = {
-  sm: "max-w-[440px]",
-  md: "max-w-[520px]",
-  lg: "max-w-[720px]",
+  sm: "max-w-[420px] sm:mx-4",
+  small: "max-w-[420px] sm:mx-4",
+  md: "max-w-[520px] sm:mx-4",
+  medium: "max-w-[520px] sm:mx-4",
+  lg: "max-w-[720px] sm:mx-4",
+  large: "max-w-[720px] sm:mx-4",
+  xl: "max-w-[960px] sm:mx-4",
+  wide: "max-w-[1040px] sm:mx-4",
+  full: "max-w-[1100px] sm:mx-4",
 };
 
 const variantSize: Record<ModalVariant, ModalSize> = {
@@ -41,10 +47,19 @@ const variantSize: Record<ModalVariant, ModalSize> = {
 };
 
 const iconTones = {
-  brand: "bg-brand-soft text-brand",
-  danger: "bg-red-50 text-danger",
-  warning: "bg-amber-50 text-warning",
+  brand: "bg-accent-subtle text-accent",
+  danger: "bg-danger-subtle text-danger",
+  warning: "bg-warning-subtle text-warning",
 };
+
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled]):not([tabindex="-1"])',
+  'a[href]:not([tabindex="-1"])',
+  'input:not([disabled]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(", ");
 
 export function Modal({
   open,
@@ -63,38 +78,35 @@ export function Modal({
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [visible, setVisible] = useState(open);
   const [entered, setEntered] = useState(false);
 
   const resolvedSize = size ?? variantSize[variant];
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      onCloseRef.current();
+      return;
+    }
 
-      if (event.key !== "Tab" || !dialogRef.current) return;
+    if (event.key !== "Tab" || !dialogRef.current) return;
 
-      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) return;
+    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    if (focusable.length === 0) return;
 
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
 
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    },
-    [onClose],
-  );
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -111,41 +123,50 @@ export function Modal({
   useEffect(() => {
     if (!visible) return;
 
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
     document.addEventListener("keydown", handleKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [visible, handleKeyDown]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+
     const timer = window.setTimeout(() => {
+      const root = dialogRef.current;
+      if (!root) return;
       const initial =
-        dialogRef.current?.querySelector<HTMLElement>("[data-modal-autofocus]") ??
-        dialogRef.current?.querySelector<HTMLElement>(
-          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [data-modal-footer] button',
+        root.querySelector<HTMLElement>("[data-modal-autofocus]") ??
+        root.querySelector<HTMLElement>(
+          "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [data-modal-footer] button",
         );
       initial?.focus();
     }, 20);
 
     return () => {
       window.clearTimeout(timer);
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
       previouslyFocused.current?.focus();
+      previouslyFocused.current = null;
     };
-  }, [visible, handleKeyDown]);
+  }, [open]);
 
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-label="Kapat"
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div
+        aria-hidden
         className={cn(
-          "absolute inset-0 bg-ink/35 backdrop-blur-[2px] transition-opacity duration-[170ms] ease-out",
+          "absolute inset-0 bg-ink/45 backdrop-blur-[3px] transition-opacity duration-[170ms] ease-out",
           entered ? "opacity-100" : "opacity-0",
         )}
-        onClick={onClose}
+        onClick={() => onCloseRef.current()}
       />
       <div
         ref={dialogRef}
@@ -154,18 +175,18 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
-          "relative z-10 flex w-full max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-modal",
+          "relative z-10 flex h-[min(100dvh,100%)] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden rounded-none border border-line bg-surface shadow-modal sm:h-auto sm:max-h-[88vh] sm:rounded-lg",
           "transition-[opacity,transform] duration-[170ms] ease-out",
           entered ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.98] opacity-0",
           sizes[resolvedSize],
           className,
         )}
       >
-        <div className="flex shrink-0 items-start gap-3 border-b border-line px-6 py-5">
+        <div className="flex shrink-0 items-start gap-3 px-5 py-5 sm:px-6">
           {Icon ? (
             <span
               className={cn(
-                "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg",
+                "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
                 iconTones[iconTone],
               )}
             >
@@ -173,19 +194,19 @@ export function Modal({
             </span>
           ) : null}
           <div className="min-w-0 flex-1 pt-0.5">
-            <h2 id={titleId} className="text-[17px] font-semibold leading-snug text-ink">
+            <h2 id={titleId} className="text-[17px] font-medium leading-snug text-ink">
               {title}
             </h2>
             {description ? (
-              <p id={descriptionId} className="mt-1 text-[13px] leading-5 text-muted">
+              <p id={descriptionId} className="mt-1 whitespace-pre-line text-[13px] leading-5 text-muted">
                 {description}
               </p>
             ) : null}
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-muted transition-colors duration-micro hover:bg-canvas hover:text-ink"
+            onClick={() => onCloseRef.current()}
+            className="rounded-md p-1.5 text-muted transition-colors duration-micro hover:bg-canvas hover:text-ink"
             aria-label="Kapat"
           >
             <X className="size-4" />
@@ -193,13 +214,13 @@ export function Modal({
         </div>
 
         {children ? (
-          <div className="min-h-0 overflow-y-auto px-6 py-5">{children}</div>
+          <div className="min-h-0 overflow-y-auto border-t border-line px-5 py-5 sm:px-6">{children}</div>
         ) : null}
 
         {footer ? (
           <div
             data-modal-footer
-            className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-6 py-4"
+            className="action-stack shrink-0 border-t border-line bg-canvas/50 px-5 py-4 sm:flex-row sm:justify-end"
           >
             {footer}
           </div>
