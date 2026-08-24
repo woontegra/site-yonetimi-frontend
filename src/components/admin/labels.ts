@@ -48,6 +48,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "tenant.activate": "Tenant aktifleştirildi",
   "tenant.deactivate": "Tenant pasife alındı",
   "tenant.create": "Tenant oluşturuldu",
+  "tenant.delete": "Tenant kalıcı olarak silindi",
   "subscription.extend": "Abonelik uzatıldı",
   "subscription.trial": "Deneme süresi verildi",
   "subscription.plan_change": "Plan değiştirildi",

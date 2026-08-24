@@ -12,6 +12,7 @@ export type AdminSubscription = {
   cancelledAt: string | null;
   remainingDays: number;
   note: string | null;
+  updatedAt?: string;
 };
 
 export type AdminOwner = { id: string; fullName: string; email: string } | null;
@@ -78,6 +79,7 @@ export type AdminTenantListItem = {
 
 export type AdminTenantDetail = AdminTenantListItem & {
   updatedAt: string;
+  isProtected?: boolean;
   whatsapp: {
     id: string;
     connectionStatus: string;
@@ -85,7 +87,24 @@ export type AdminTenantDetail = AdminTenantListItem & {
     displayPhoneNumber: string | null;
     lastCheckedAt: string | null;
   } | null;
+  email?: { connected: boolean; status: string | null };
+  integrationSummary?: {
+    whatsappConnected: boolean;
+    emailConnected: boolean;
+    connectedCount: number;
+  };
   usage: { sites: number; apartments: number; users: number; persons: number; messages: number };
+  recordCounts?: {
+    sites: number;
+    buildings: number;
+    apartments: number;
+    users: number;
+    persons: number;
+    debts: number;
+    payments: number;
+    expenses: number;
+    integrations: number;
+  };
 };
 
 export type AdminUserListItem = {
@@ -257,6 +276,14 @@ export function activateAdminTenant(auth: AdminAuth, id: string) {
 
 export function deactivateAdminTenant(auth: AdminAuth, id: string) {
   return apiRequest(`/api/admin/tenants/${id}/deactivate`, { ...auth, method: "POST" });
+}
+
+export function deleteAdminTenant(auth: AdminAuth, id: string, confirmName: string) {
+  return apiRequest<{ message: string }>(`/api/admin/tenants/${id}`, {
+    ...auth,
+    method: "DELETE",
+    body: JSON.stringify({ confirmName }),
+  });
 }
 
 export function extendAdminTenantSubscription(

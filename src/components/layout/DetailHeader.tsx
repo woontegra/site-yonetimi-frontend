@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type DetailHeaderProps = {
@@ -44,7 +44,7 @@ export function DetailHeader({
 }
 
 type DetailTabsProps<T extends string> = {
-  tabs: ReadonlyArray<{ id: T; label: string }>;
+  tabs: ReadonlyArray<{ id: T; label: string; icon?: LucideIcon }>;
   value: T;
   onChange: (id: T) => void;
   className?: string;
@@ -59,12 +59,13 @@ export function DetailTabs<T extends string>({ tabs, value, onChange, className 
           type="button"
           onClick={() => onChange(item.id)}
           className={cn(
-            "shrink-0 border-b-2 px-3 py-2 text-sm transition-colors duration-micro",
+            "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors duration-micro",
             value === item.id
-              ? "border-accent font-medium text-accent"
+              ? "border-accent bg-accent-subtle font-medium text-accent"
               : "border-transparent text-muted hover:text-ink",
           )}
         >
+          {item.icon ? <item.icon className="size-3.5 shrink-0" aria-hidden /> : null}
           {item.label}
         </button>
       ))}
