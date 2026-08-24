@@ -2,6 +2,7 @@
 
 import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { isSmsFeatureEnabled } from "@/lib/messaging-channels";
 
 type DebtReminderBarProps = {
   indebtedApartmentCount: number;
@@ -30,7 +31,9 @@ export function DebtReminderBar({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <div className="text-left sm:text-right">
           <p className="text-sm font-medium text-ink">{indebtedApartmentCount} borçlu daire</p>
-          <p className="text-[12px] text-muted">WhatsApp / SMS gönderimi</p>
+          <p className="text-[12px] text-muted">
+            {isSmsFeatureEnabled() ? "WhatsApp / SMS gönderimi" : "WhatsApp gönderimi"}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {onHistoryClick ? (

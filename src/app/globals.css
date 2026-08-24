@@ -56,7 +56,7 @@ body {
 }
 
 html {
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 body {
@@ -67,15 +67,29 @@ body {
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
-input[type="date"],
-input[type="datetime-local"],
-input[type="month"],
-input[type="week"] {
-  min-width: 0;
-  max-width: 100%;
+html:has(.auth-screen),
+html:has(.auth-screen) body {
+  overflow: visible;
+}
+
+input,
+textarea,
+select {
+  letter-spacing: normal;
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-caps-lock-indicator {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 @layer components {

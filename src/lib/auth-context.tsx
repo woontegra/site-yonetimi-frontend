@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (typeof window !== "undefined") {
         const path = window.location.pathname;
-        if (path.startsWith("/giris") || path.startsWith("/aktivasyon")) {
+        if (path.startsWith("/giris") || path.startsWith("/login") || path.startsWith("/aktivasyon")) {
           const existingPublic = readSession();
           if (existingPublic?.token) {
             setUser(existingPublic.user);
@@ -64,6 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenantId: session.user.tenants?.[0]?.id,
         tenantName: session.user.tenants?.[0]?.name,
         isPlatformAdmin: Boolean(session.user.isPlatformAdmin),
+        role: session.user.tenants?.[0]?.role,
+        permissions: session.user.tenants?.[0]?.permissions ?? [],
+        allSites: session.user.tenants?.[0]?.allSites ?? true,
+        siteIds: session.user.tenants?.[0]?.siteIds ?? null,
       };
       writeSession({ token: session.token, user: nextUser });
       setUser(nextUser);

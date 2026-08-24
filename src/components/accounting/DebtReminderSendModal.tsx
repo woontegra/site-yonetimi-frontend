@@ -32,8 +32,19 @@ import {
   type MessageTemplate,
 } from "@/lib/communications-api";
 import { ApiError } from "@/lib/http";
+import {
+  DEFAULT_MESSAGE_CHANNEL,
+  hasMultipleUserFacingMessageChannels,
+  MESSAGE_CHANNEL_HINTS,
+  USER_FACING_MESSAGE_CHANNELS,
+} from "@/lib/messaging-channels";
 import { formatDateTr, formatMoney } from "@/lib/money";
 import { RELATION_TYPE_LABELS } from "@/lib/person-constants";
+
+const CHANNEL_ICONS = {
+  WHATSAPP: MessageCircle,
+  SMS: MessageSquare,
+} as const;
 
 type Step = "channel" | "recipients" | "result";
 
@@ -51,8 +62,10 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
   const { showToast } = useToast();
   useCloseFormOnSiteChange(open, onClose);
 
-  const [step, setStep] = useState<Step>("channel");
-  const [channel, setChannel] = useState<MessageChannel>("WHATSAPP");
+  const [step, setStep] = useState<Step>(
+    hasMultipleUserFacingMessageChannels() ? "channel" : "recipients",
+  );
+  const [channel, setChannel] = useState<MessageChannel>(DEFAULT_MESSAGE_CHANNEL);
   const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -73,8 +86,8 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
   const [previewRow, setPreviewRow] = useState<DebtReminderRecipient | null>(null);
 
   const resetState = useCallback(() => {
-    setStep("channel");
-    setChannel("WHATSAPP");
+    setStep(hasMultipleUserFacingMessageChannels() ? "channel" : "recipients");
+    setChannel(DEFAULT_MESSAGE_CHANNEL);
     setTemplateId("");
     setIncludeTenant(true);
     setIncludeOwner(true);
@@ -330,14 +343,24 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
                 variant="secondary"
                 disabled={sending}
                 onClick={() => {
-                  setStep("channel");
-                  setError("");
+                  if (hasMultipleUserFacingMessageChannels()) {
+                    setStep("channel");
+                    setError("");
+                    return;
+                  }
+                  onClose();
                 }}
               >
-                Geri
+                {hasMultipleUserFacingMessageChannels() ? "Geri" : "Vazgeç"}
               </Button>
               <Button
-                disabled={sending || selected.size === 0 || !templateId || relationTypes.length === 0}
+                disabled={
+                  sending ||
+                  selected.size === 0 ||
+                  !templateId ||
+                  relationTypes.length === 0 ||
+                  whatsappNeedsConnection
+                }
                 onClick={() => void handleSend()}
               >
                 {sending ? "Gönderiliyor…" : "Gönder"}
@@ -350,19 +373,14 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
       >
         {step === "channel" ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            {(
-              [
-                { id: "WHATSAPP" as const, icon: MessageCircle, hint: "WhatsApp üzerinden bilgilendirme" },
-                { id: "SMS" as const, icon: MessageSquare, hint: "SMS ile kısa hatırlatma" },
-              ] as const
-            ).map((item) => {
-              const Icon = item.icon;
-              const active = channel === item.id;
+            {USER_FACING_MESSAGE_CHANNELS.map((id) => {
+              const Icon = CHANNEL_ICONS[id];
+              const active = channel === id;
               return (
                 <button
-                  key={item.id}
+                  key={id}
                   type="button"
-                  onClick={() => setChannel(item.id)}
+                  onClick={() => setChannel(id)}
                   className={cn(
                     "flex flex-col gap-3 rounded-[10px] border px-4 py-4 text-left transition-colors",
                     active
@@ -374,11 +392,11 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
                     <span className="flex size-10 items-center justify-center rounded-lg bg-brand-soft text-brand">
                       <Icon className="size-5" aria-hidden />
                     </span>
-                    {channelBadge(item.id)}
+                    {channelBadge(id)}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-ink">{MESSAGE_CHANNEL_LABELS[item.id]}</p>
-                    <p className="mt-1 text-[13px] text-muted">{item.hint}</p>
+                    <p className="text-sm font-semibold text-ink">{MESSAGE_CHANNEL_LABELS[id]}</p>
+                    <p className="mt-1 text-[13px] text-muted">{MESSAGE_CHANNEL_HINTS[id]}</p>
                   </div>
                 </button>
               );
@@ -386,7 +404,7 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
           </div>
         ) : null}
 
-        {step === "channel" && whatsappNeedsConnection ? (
+        {(step === "channel" || !hasMultipleUserFacingMessageChannels()) && whatsappNeedsConnection ? (
           <p className="mt-3 text-[13px] text-danger">
             WhatsApp bağlantısı kurulmamış.{" "}
             <Link href="/app/entegrasyonlar" className="font-medium text-brand hover:underline">

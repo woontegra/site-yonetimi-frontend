@@ -28,6 +28,12 @@ import {
 } from "@/lib/communications-api";
 import { ApiError } from "@/lib/http";
 import {
+  DEFAULT_MESSAGE_CHANNEL,
+  isSmsFeatureEnabled,
+  isUserFacingMessageChannel,
+  USER_FACING_MESSAGE_CHANNELS,
+} from "@/lib/messaging-channels";
+import {
   listWhatsAppTemplates,
   type WhatsAppTemplate,
 } from "@/lib/whatsapp-api";
@@ -40,7 +46,7 @@ type FormState = {
   whatsAppParameterMapping: Record<string, string>;
 };
 
-const emptyForm = (channel: MessageChannel = "WHATSAPP"): FormState => ({
+const emptyForm = (channel: MessageChannel = DEFAULT_MESSAGE_CHANNEL): FormState => ({
   name: "",
   channel,
   body: "",
@@ -104,9 +110,9 @@ export function MessageTemplatesSettings() {
     setLoading(true);
     try {
       const result = await listMessageTemplates(auth, {
-        channel: channelFilter || undefined,
+        channel: channelFilter || (isSmsFeatureEnabled() ? undefined : DEFAULT_MESSAGE_CHANNEL),
       });
-      setItems(result.items);
+      setItems(result.items.filter((item) => isUserFacingMessageChannel(item.channel)));
     } catch (error) {
       showToast(error instanceof ApiError ? error.message : "Şablonlar yüklenemedi.", "error");
       setItems([]);
@@ -123,7 +129,11 @@ export function MessageTemplatesSettings() {
     setWaTemplatesLoading(true);
     try {
       const result = await listWhatsAppTemplates(auth, { status: "APPROVED" });
-      setWaTemplates(result.items.filter((item) => item.sendable));
+      setWaTemplates(
+        result.items.filter(
+          (item) => item.sendable && !item.name.toLowerCase().startsWith("mk_"),
+        ),
+      );
     } catch {
       setWaTemplates([]);
     } finally {
@@ -155,7 +165,7 @@ export function MessageTemplatesSettings() {
 
   function openCreate() {
     setEditing(null);
-    setForm(emptyForm(channelFilter || "WHATSAPP"));
+    setForm(emptyForm(channelFilter || DEFAULT_MESSAGE_CHANNEL));
     setFormError("");
     setFormOpen(true);
   }
@@ -293,7 +303,9 @@ export function MessageTemplatesSettings() {
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-muted">
-        SMS şablonlarında değişkenler gönderimde doldurulur. WhatsApp şablonları Meta onaylı şablonlarla eşleşir.
+        {isSmsFeatureEnabled()
+          ? "SMS şablonlarında değişkenler gönderimde doldurulur. WhatsApp şablonları Meta onaylı şablonlarla eşleşir."
+          : "WhatsApp şablonları Meta onaylı şablonlarla eşleşir."}
       </p>
       <p className="rounded-[10px] border border-line bg-canvas/40 px-3 py-2.5 text-[13px] text-muted">
         Meta şablon oluşturma ve onay süreci için{" "}
@@ -304,16 +316,23 @@ export function MessageTemplatesSettings() {
       </p>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Select
-          value={channelFilter}
-          onChange={(e) => setChannelFilter(e.target.value as MessageChannel | "")}
-          className="sm:max-w-[220px]"
-          aria-label="Kanal filtresi"
-        >
-          <option value="">Tüm kanallar</option>
-          <option value="WHATSAPP">WhatsApp</option>
-          <option value="SMS">SMS</option>
-        </Select>
+        {isSmsFeatureEnabled() ? (
+          <Select
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value as MessageChannel | "")}
+            className="sm:max-w-[220px]"
+            aria-label="Kanal filtresi"
+          >
+            <option value="">Tüm kanallar</option>
+            {USER_FACING_MESSAGE_CHANNELS.map((channel) => (
+              <option key={channel} value={channel}>
+                {MESSAGE_CHANNEL_LABELS[channel]}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <div />
+        )}
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-3.5" aria-hidden />
           Yeni Şablon
@@ -324,9 +343,9 @@ export function MessageTemplatesSettings() {
         <TableElement>
           <THead>
             <TR>
-              <TH>Ad</TH>
-              <TH>Kanal</TH>
-              <TH>Meta / İçerik</TH>
+                  <TH>Ad</TH>
+                  {isSmsFeatureEnabled() ? <TH>Kanal</TH> : null}
+                  <TH>Meta / İçerik</TH>
               <TH>Durum</TH>
               <TH>İşlem</TH>
             </TR>
@@ -334,13 +353,13 @@ export function MessageTemplatesSettings() {
           <TBody>
             {loading ? (
               <TR>
-                <TD colSpan={5} className="text-muted">
+                <TD colSpan={isSmsFeatureEnabled() ? 5 : 4} className="text-muted">
                   Yükleniyor…
                 </TD>
               </TR>
             ) : items.length === 0 ? (
               <TR>
-                <TD colSpan={5} className="text-muted">
+                <TD colSpan={isSmsFeatureEnabled() ? 5 : 4} className="text-muted">
                   Henüz mesaj şablonu yok.
                 </TD>
               </TR>
@@ -350,9 +369,11 @@ export function MessageTemplatesSettings() {
                   <TD>
                     <p className="font-medium">{item.name}</p>
                   </TD>
-                  <TD>
-                    <Badge>{MESSAGE_CHANNEL_LABELS[item.channel]}</Badge>
-                  </TD>
+                  {isSmsFeatureEnabled() ? (
+                    <TD>
+                      <Badge>{MESSAGE_CHANNEL_LABELS[item.channel]}</Badge>
+                    </TD>
+                  ) : null}
                   <TD>
                     {item.channel === "WHATSAPP" && item.whatsAppTemplate ? (
                       <p className="text-[13px] text-ink">
@@ -424,22 +445,27 @@ export function MessageTemplatesSettings() {
               data-modal-autofocus
             />
           </FormField>
-          <FormField label="Kanal" required>
-            <Select
-              value={form.channel}
-              onChange={(e) => {
-                const channel = e.target.value as MessageChannel;
-                setForm((prev) => ({
-                  ...emptyForm(channel),
-                  name: prev.name,
-                }));
-              }}
-              disabled={Boolean(editing)}
-            >
-              <option value="WHATSAPP">WhatsApp</option>
-              <option value="SMS">SMS</option>
-            </Select>
-          </FormField>
+          {isSmsFeatureEnabled() ? (
+            <FormField label="Kanal" required>
+              <Select
+                value={form.channel}
+                onChange={(e) => {
+                  const channel = e.target.value as MessageChannel;
+                  setForm((prev) => ({
+                    ...emptyForm(channel),
+                    name: prev.name,
+                  }));
+                }}
+                disabled={Boolean(editing)}
+              >
+                {USER_FACING_MESSAGE_CHANNELS.map((channel) => (
+                  <option key={channel} value={channel}>
+                    {MESSAGE_CHANNEL_LABELS[channel]}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          ) : null}
 
           {form.channel === "WHATSAPP" ? (
             <>

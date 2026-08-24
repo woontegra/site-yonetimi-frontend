@@ -15,12 +15,22 @@ function formatLocation(site: Site): string {
 type SitesTableProps = {
   items: Site[];
   loading: boolean;
+  canOpenWizard?: boolean;
   onEdit: (site: Site) => void;
+  onOpenWizard?: (site: Site) => void;
   onArchive: (site: Site) => void;
   onDelete: (site: Site) => void;
 };
 
-export function SitesTable({ items, loading, onEdit, onArchive, onDelete }: SitesTableProps) {
+export function SitesTable({
+  items,
+  loading,
+  canOpenWizard = false,
+  onEdit,
+  onOpenWizard,
+  onArchive,
+  onDelete,
+}: SitesTableProps) {
   return (
     <>
       <div className="space-y-3 md:hidden">
@@ -58,10 +68,11 @@ export function SitesTable({ items, loading, onEdit, onArchive, onDelete }: Site
                     <StatusBadge active={site.isActive} />
                     <Dropdown
                       align="right"
+                      menuClassName="min-w-[12.5rem] max-w-[calc(100vw-1rem)]"
                       trigger={
                         <button
                           type="button"
-                          className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-ink"
+                          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-ink"
                           aria-label="İşlemler"
                         >
                           <MoreHorizontal className="size-4" />
@@ -69,6 +80,9 @@ export function SitesTable({ items, loading, onEdit, onArchive, onDelete }: Site
                       }
                     >
                       <DropdownItem onClick={() => onEdit(site)}>Düzenle</DropdownItem>
+                      {canOpenWizard && onOpenWizard ? (
+                        <DropdownItem onClick={() => onOpenWizard(site)}>Kurulum Sihirbazı</DropdownItem>
+                      ) : null}
                       <DropdownItem onClick={() => onArchive(site)}>Arşivle</DropdownItem>
                       <DropdownItem danger onClick={() => onDelete(site)}>
                         Sil
@@ -137,10 +151,11 @@ export function SitesTable({ items, loading, onEdit, onArchive, onDelete }: Site
                       <TD className="text-right">
                         <Dropdown
                           align="right"
+                          menuClassName="min-w-[12.5rem]"
                           trigger={
                             <button
                               type="button"
-                              className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-ink"
+                              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-ink"
                               aria-label="İşlemler"
                             >
                               <MoreHorizontal className="size-4" />
@@ -148,6 +163,9 @@ export function SitesTable({ items, loading, onEdit, onArchive, onDelete }: Site
                           }
                         >
                           <DropdownItem onClick={() => onEdit(site)}>Düzenle</DropdownItem>
+                          {canOpenWizard && onOpenWizard ? (
+                            <DropdownItem onClick={() => onOpenWizard(site)}>Kurulum Sihirbazı</DropdownItem>
+                          ) : null}
                           <DropdownItem onClick={() => onArchive(site)}>Arşivle</DropdownItem>
                           <DropdownItem danger onClick={() => onDelete(site)}>
                             Sil

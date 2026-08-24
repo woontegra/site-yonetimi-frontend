@@ -29,7 +29,7 @@ type ActiveSiteContextValue = {
   siteId: string | null;
   site: SiteSummary | null;
   hasSites: boolean;
-  setSiteId: (id: string) => void;
+  setSiteId: (id: string, options?: { syncRoute?: boolean }) => void;
   refreshSites: (options?: { preferSiteId?: string | null }) => Promise<void>;
 };
 
@@ -97,14 +97,32 @@ function resolveActiveSiteId(
   return sites[0].id;
 }
 
-/** Site değişince detay sayfalarından listeye yönlendir. */
-function listPathForDetail(pathname: string): string | null {
+function normalizeAppPath(pathname: string): string {
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+}
+
+/**
+ * Header’dan site değişince URL’i aktif siteyle hizala.
+ * Site detayı → yeni sitenin detayı. Kayıt detayı → ilgili liste.
+ */
+function nextPathForSiteChange(pathname: string, newSiteId: string): string | null {
+  const path = normalizeAppPath(pathname);
+
+  const siteDetail = path.match(/^\/app\/siteler\/([^/]+)$/);
+  if (siteDetail) {
+    if (siteDetail[1] === newSiteId) return null;
+    return `/app/siteler/${newSiteId}`;
+  }
+
   const rules: Array<{ re: RegExp; to: string }> = [
     { re: /^\/app\/binalar\/[^/]+$/, to: "/app/binalar" },
     { re: /^\/app\/daireler\/[^/]+$/, to: "/app/daireler" },
     { re: /^\/app\/kisiler\/[^/]+$/, to: "/app/kisiler" },
-    { re: /^\/app\/muhasebe\/borclar\/[^/]+$/, to: "/app/muhasebe" },
-    { re: /^\/app\/muhasebe\/tahsilatlar\/[^/]+$/, to: "/app/muhasebe" },
+    { re: /^\/app\/muhasebe\/borclar\/[^/]+$/, to: "/app/muhasebe/borclar" },
+    { re: /^\/app\/muhasebe\/tahsilatlar\/[^/]+$/, to: "/app/muhasebe/tahsilatlar" },
     { re: /^\/app\/muhasebe\/giderler\/[^/]+$/, to: "/app/muhasebe" },
     { re: /^\/app\/muhasebe\/aidatlar\/[^/]+$/, to: "/app/muhasebe/aidatlar" },
     { re: /^\/app\/muhasebe\/bankalar\/[^/]+$/, to: "/app/muhasebe/bankalar" },
@@ -115,10 +133,9 @@ function listPathForDetail(pathname: string): string | null {
     { re: /^\/app\/demirbaslar\/[^/]+$/, to: "/app/demirbaslar" },
     { re: /^\/app\/duyurular\/[^/]+$/, to: "/app/duyurular" },
     { re: /^\/app\/bilgi-oneri\/[^/]+$/, to: "/app/bilgi-oneri" },
-    { re: /^\/app\/siteler\/[^/]+$/, to: "/app/siteler" },
   ];
   for (const rule of rules) {
-    if (rule.re.test(pathname)) return rule.to;
+    if (rule.re.test(path)) return rule.to;
   }
   return null;
 }
@@ -129,6 +146,7 @@ export function ActiveSiteProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+  const pendingRouteRef = useRef<string | null>(null);
 
   const [status, setStatus] = useState<SiteBootstrapStatus>("loading");
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
@@ -172,28 +190,52 @@ export function ActiveSiteProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!authReady) return;
-    // Tenant değişince eski site state'ini anında temizle.
     setStatus("loading");
     setSites([]);
     setSiteIdState(null);
     setBootstrapError(null);
-    void refreshSites();
+    const match = normalizeAppPath(pathnameRef.current).match(/^\/app\/siteler\/([^/]+)$/);
+    void refreshSites({ preferSiteId: match?.[1] ?? null });
   }, [authReady, refreshSites]);
 
   const setSiteId = useCallback(
-    (id: string) => {
+    (id: string, options?: { syncRoute?: boolean }) => {
       if (!id || id === siteIdRef.current) return;
       if (!sites.some((s) => s.id === id)) return;
 
-      const target = listPathForDetail(pathnameRef.current);
+      const syncRoute = options?.syncRoute !== false;
       setSiteIdState(id);
       persistSiteId(tenantId, id);
-      if (target) {
+
+      if (!syncRoute) return;
+
+      const target = nextPathForSiteChange(pathnameRef.current, id);
+      if (target && target !== normalizeAppPath(pathnameRef.current)) {
+        pendingRouteRef.current = target;
         router.replace(target);
       }
     },
     [sites, tenantId, router],
   );
+
+  useEffect(() => {
+    const path = normalizeAppPath(pathname);
+    if (pendingRouteRef.current) {
+      if (path === pendingRouteRef.current) {
+        pendingRouteRef.current = null;
+      }
+      return;
+    }
+
+    const match = path.match(/^\/app\/siteler\/([^/]+)$/);
+    if (!match) return;
+    const urlSiteId = match[1];
+    if (!urlSiteId || urlSiteId === siteIdRef.current) return;
+    if (!sites.some((s) => s.id === urlSiteId)) return;
+
+    setSiteIdState(urlSiteId);
+    persistSiteId(tenantId, urlSiteId);
+  }, [pathname, sites, tenantId]);
 
   const site = useMemo(
     () => sites.find((s) => s.id === siteId) ?? null,

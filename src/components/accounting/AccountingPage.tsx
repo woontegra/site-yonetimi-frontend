@@ -171,6 +171,14 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
       setTab(id);
       return;
     }
+    if (id === "borclar") {
+      if (pathname !== "/app/muhasebe/borclar") {
+        router.push("/app/muhasebe/borclar");
+        return;
+      }
+      setTab(id);
+      return;
+    }
     if (pathname !== "/app/muhasebe") {
       router.push("/app/muhasebe");
     }

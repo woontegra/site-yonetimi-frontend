@@ -32,8 +32,10 @@ import {
   updateBuilding,
   type Building,
 } from "@/lib/buildings-api";
-import { getSite, updateSite, type Site } from "@/lib/sites-api";
+import { getSite, setupWizardActionLabel, updateSite, type Site } from "@/lib/sites-api";
+import { canManageSites } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/lib/auth-context";
 
 const tabs = [
   { id: "genel", label: "Genel" },
@@ -54,10 +56,13 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 
 export function SiteDetailPage() {
   const params = useParams<{ id: string }>();
+  const siteId = String(params.id);
+  const { user } = useAuth();
   const tenantAuth = useApiAuth({ requireSite: false });
-  const { setSiteId, refreshSites, siteId: activeSiteId } = useActiveSite();
+  const { setSiteId, refreshSites, siteId: activeSiteId, sites } = useActiveSite();
   const { showToast } = useToast();
   const { openWizard } = useSiteSetupWizard();
+  const canOpenWizard = canManageSites(user);
 
   const [site, setSite] = useState<Site | null>(null);
   const [error, setError] = useState("");
@@ -73,7 +78,15 @@ export function SiteDetailPage() {
   const [buildingPending, setBuildingPending] = useState(false);
   const [buildingError, setBuildingError] = useState("");
 
-  const siteId = String(params.id);
+  useEffect(() => {
+    setTab("genel");
+    setSite(null);
+    setError("");
+    setFormOpen(false);
+    setBuildingFormOpen(false);
+    setEditingBuilding(null);
+    setBuildings([]);
+  }, [siteId]);
 
   const load = useCallback(async () => {
     if (!tenantAuth) return;
@@ -172,6 +185,18 @@ export function SiteDetailPage() {
     }
   }
 
+  function openWizardForThisSite() {
+    if (!canManageSites(user)) {
+      showToast("Kurulum sihirbazını açma yetkiniz yok.", "error");
+      return;
+    }
+    if (!site?.isActive || !sites.some((item) => item.id === site.id)) {
+      showToast("Sihirbaz yalnızca aktif siteler için açılabilir.", "error");
+      return;
+    }
+    openWizard({ siteId: site.id });
+  }
+
   const locationMuted = [site?.city, site?.district].filter(Boolean).join(" / ");
 
   if (error) {
@@ -208,13 +233,18 @@ export function SiteDetailPage() {
           <h1 className="text-2xl font-semibold text-ink">{site.name}</h1>
           {locationMuted ? <p className="mt-1 text-sm text-muted">{locationMuted}</p> : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {site.setupStatus !== "COMPLETED" && site.setupStatus !== "SKIPPED" ? (
-            <Button type="button" variant="secondary" onClick={() => openWizard()}>
-              {site.setupStatus === "IN_PROGRESS" ? "Kuruluma Devam Et" : "Site Kurulumunu Tamamla"}
+        <div className="flex w-full min-w-0 flex-wrap gap-2 sm:w-auto sm:justify-end">
+          {canOpenWizard ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={openWizardForThisSite}
+            >
+              {setupWizardActionLabel(site.setupStatus)}
             </Button>
           ) : null}
-          <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
+          <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => setFormOpen(true)}>
             Düzenle
           </Button>
         </div>

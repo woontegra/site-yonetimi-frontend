@@ -28,6 +28,7 @@ export type NavItem = {
   icon: LucideIcon;
   badgeKey?: "visitors";
   isActive?: (pathname: string) => boolean;
+  permission?: string | string[];
 };
 
 export type NavSection = {
@@ -40,60 +41,66 @@ export const navSections: NavSection[] = [
   {
     id: "genel",
     label: "Genel",
-    items: [{ href: "/app", label: "Genel Bakış", icon: LayoutDashboard }],
+    items: [{ href: "/app", label: "Genel Bakış", icon: LayoutDashboard, permission: "dashboard.view" }],
   },
   {
     id: "yapi",
     label: "Yapı ve Sakinler",
     items: [
-      { href: "/app/siteler", label: "Siteler", icon: MapPinned },
-      { href: "/app/binalar", label: "Binalar", icon: Building2 },
-      { href: "/app/daireler", label: "Daireler", icon: DoorOpen },
-      { href: "/app/kisiler", label: "Kişiler", icon: Users },
+      { href: "/app/siteler", label: "Siteler", icon: MapPinned, permission: "sites.view" },
+      { href: "/app/binalar", label: "Binalar", icon: Building2, permission: "buildings.view" },
+      { href: "/app/daireler", label: "Daireler", icon: DoorOpen, permission: "apartments.view" },
+      { href: "/app/kisiler", label: "Kişiler", icon: Users, permission: "persons.view" },
     ],
   },
   {
     id: "finans",
     label: "Finans",
     items: [
-      { href: "/app/muhasebe/aidatlar", label: "Aidatlar", icon: Receipt },
+      { href: "/app/muhasebe/aidatlar", label: "Aidatlar", icon: Receipt, permission: "dues.view" },
       {
-        href: "/app/muhasebe",
+        href: "/app/muhasebe/borclar",
         label: "Borçlar",
         icon: Wallet,
-        isActive: (pathname) =>
-          pathname === "/app/muhasebe" || pathname.startsWith("/app/muhasebe/borclar"),
+        permission: "debts.view",
+        isActive: (pathname) => pathname.startsWith("/app/muhasebe/borclar"),
       },
-      { href: "/app/muhasebe/tahsilatlar", label: "Tahsilatlar", icon: Banknote },
-      { href: "/app/muhasebe/giderler", label: "Giderler", icon: TrendingDown },
-      { href: "/app/muhasebe/bankalar", label: "Banka", icon: Landmark },
+      { href: "/app/muhasebe/tahsilatlar", label: "Tahsilatlar", icon: Banknote, permission: "payments.view" },
+      { href: "/app/muhasebe/giderler", label: "Giderler", icon: TrendingDown, permission: "expenses.view" },
+      { href: "/app/muhasebe/bankalar", label: "Banka", icon: Landmark, permission: "banks.view" },
     ],
   },
   {
     id: "operasyon",
     label: "Operasyon",
     items: [
-      { href: "/app/demirbaslar", label: "Demirbaşlar", icon: Wrench },
-      { href: "/app/misafirler", label: "Misafirler", icon: UserRound, badgeKey: "visitors" },
-      { href: "/app/calisanlar", label: "Çalışanlar", icon: Briefcase },
-      { href: "/app/tedarikciler", label: "Tedarikçiler", icon: Truck },
+      { href: "/app/demirbaslar", label: "Demirbaşlar", icon: Wrench, permission: "assets.view" },
+      { href: "/app/misafirler", label: "Misafirler", icon: UserRound, badgeKey: "visitors", permission: "visitors.view" },
+      { href: "/app/calisanlar", label: "Çalışanlar", icon: Briefcase, permission: "employees.view" },
+      { href: "/app/tedarikciler", label: "Tedarikçiler", icon: Truck, permission: "suppliers.view" },
     ],
   },
   {
     id: "iletisim",
     label: "İletişim",
     items: [
-      { href: "/app/duyurular", label: "Duyurular", icon: Bell },
-      { href: "/app/bilgi-oneri", label: "Bilgi ve Öneriler", icon: MessageSquare },
-      { href: "/app/whatsapp-sablonlari", label: "WhatsApp Şablonları", icon: MessageCircle },
+      { href: "/app/duyurular", label: "Duyurular", icon: Bell, permission: "announcements.view" },
+      { href: "/app/bilgi-oneri", label: "Bilgi ve Öneriler", icon: MessageSquare, permission: "feedback.view" },
+      { href: "/app/whatsapp-sablonlari", label: "WhatsApp Şablonları", icon: MessageCircle, permission: "whatsappTemplates.manage" },
     ],
   },
   {
     id: "ayarlar",
     label: "Ayarlar",
     items: [
-      { href: "/app/entegrasyonlar", label: "Entegrasyonlar", icon: Plug },
-      { href: "/app/ayarlar", label: "Site Ayarları", icon: Cog },
+      { href: "/app/entegrasyonlar", label: "Entegrasyonlar", icon: Plug, permission: "integrations.view" },
+      { href: "/app/ayarlar", label: "Site Ayarları", icon: Cog, permission: "siteSettings.manage" },
+      {
+        href: "/app/ayarlar/kullanicilar",
+        label: "Kullanıcılar ve Yetkiler",
+        icon: Users,
+        permission: ["users.view", "users.invite", "users.manage"],
+      },
     ],
   },
 ];

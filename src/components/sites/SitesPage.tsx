@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
+import { canManageSites } from "@/lib/permissions";
 import { ApiError } from "@/lib/http";
 import {
   createSite,
@@ -33,11 +34,12 @@ import {
 const PER_PAGE = 20;
 
 export function SitesPage() {
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth({ requireSite: false });
-  const { refreshSites, siteId } = useActiveSite();
+  const { refreshSites, siteId, sites } = useActiveSite();
   const { openWizard } = useSiteSetupWizard();
+  const canOpenWizard = canManageSites(user);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -103,6 +105,18 @@ export function SitesPage() {
     setEditing(site);
     setFormError("");
     setFormOpen(true);
+  }
+
+  function openWizardForSite(site: Site) {
+    if (!canManageSites(user)) {
+      showToast("Kurulum sihirbazını açma yetkiniz yok.", "error");
+      return;
+    }
+    if (!site.isActive || !sites.some((item) => item.id === site.id)) {
+      showToast("Sihirbaz yalnızca aktif siteler için açılabilir.", "error");
+      return;
+    }
+    openWizard({ siteId: site.id });
   }
 
   async function handleSubmit(values: SiteFormValues) {
@@ -212,7 +226,9 @@ export function SitesPage() {
       <SitesTable
         items={items}
         loading={loading}
+        canOpenWizard={canOpenWizard}
         onEdit={openEdit}
+        onOpenWizard={openWizardForSite}
         onArchive={(site) => setArchiving(site)}
         onDelete={(site) => setDeleting(site)}
       />

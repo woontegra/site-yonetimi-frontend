@@ -53,7 +53,9 @@ export function DashboardPage() {
     setLoading(true);
     setError("");
     try {
-      setData(await getDashboardOverview(auth));
+      const overview = await getDashboardOverview(auth);
+      if (overview.site.id !== siteId) return;
+      setData(overview);
     } catch (err) {
       setData(null);
       setError(err instanceof ApiError ? err.message : "Genel bakış yüklenemedi.");
@@ -67,7 +69,7 @@ export function DashboardPage() {
     void load();
   }, [ready, load]);
 
-  const siteName = data?.site.name || site?.name || "Aktif site";
+  const siteName = site?.name || data?.site.name || "Aktif site";
   const setupIncomplete = data ? !data.setupStatus.completed : false;
   const periodLabel = data
     ? `${MONTH_LABELS[data.financeSummary.month - 1]} ${data.financeSummary.year}`

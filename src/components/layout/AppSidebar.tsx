@@ -9,6 +9,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 import { isNavActive, navSections, adminNavSections, type NavItem } from "@/lib/nav";
 import { useAuth } from "@/lib/auth-context";
+import { hasAnyPermission, hasPermission } from "@/lib/permissions";
 import { useApiAuth } from "@/lib/active-site-context";
 import { getInsideVisitSummary } from "@/lib/visits-api";
 
@@ -77,10 +78,23 @@ export function AppSidebar({
   adminMode = false,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const auth = useApiAuth();
   const [insideCount, setInsideCount] = useState(0);
-  const sections = adminMode ? adminNavSections : navSections;
+  const sections = (adminMode ? adminNavSections : navSections)
+    .map((section) => ({
+      ...section,
+      items: adminMode
+        ? section.items
+        : section.items.filter((item) => {
+            if (!item.permission) return true;
+            if (!user.permissions || user.permissions.length === 0) return true;
+            return Array.isArray(item.permission)
+              ? hasAnyPermission(user, item.permission)
+              : hasPermission(user, item.permission);
+          }),
+    }))
+    .filter((section) => section.items.length > 0);
 
   useEffect(() => {
     if (adminMode || !ready || !auth) return;

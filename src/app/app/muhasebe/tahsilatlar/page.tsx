@@ -1,5 +1,5 @@
-import { AccountingPage } from "@/components/accounting/AccountingPage";
+import { PaymentsPage } from "@/components/accounting/PaymentsPage";
 
 export default function TahsilatlarRoute() {
-  return <AccountingPage initialTab="gelirler" />;
+  return <PaymentsPage />;
 }

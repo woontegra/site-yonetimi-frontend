@@ -1,11 +1,21 @@
 "use client";
 
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
+import { apiLogout } from "@/lib/api";
+import { clearSession } from "@/lib/session";
 
 export function UserMenu() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+
+  async function handleLogout() {
+    if (token) {
+      await apiLogout(token);
+    }
+    clearSession();
+    window.location.assign("/giris");
+  }
 
   return (
     <Dropdown
@@ -28,6 +38,10 @@ export function UserMenu() {
       <DropdownItem href="/app/ayarlar">
         <Settings className="size-4 text-muted" aria-hidden />
         Ayarlar
+      </DropdownItem>
+      <DropdownItem danger onClick={() => void handleLogout()}>
+        <LogOut className="size-4" aria-hidden />
+        Çıkış
       </DropdownItem>
     </Dropdown>
   );

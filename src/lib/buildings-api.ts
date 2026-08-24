@@ -41,7 +41,14 @@ type SessionResponse = {
     email: string;
     fullName: string;
     isPlatformAdmin?: boolean;
-    tenants?: Array<{ id: string; name: string }>;
+    tenants?: Array<{
+      id: string;
+      name: string;
+      role?: string;
+      permissions?: string[];
+      allSites?: boolean;
+      siteIds?: string[] | null;
+    }>;
   };
 };
 

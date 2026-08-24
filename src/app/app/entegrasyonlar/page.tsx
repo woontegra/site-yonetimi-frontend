@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useApiAuth } from "@/lib/active-site-context";
 import { useAuth } from "@/lib/auth-context";
 import { getIntegrationsStatus, type IntegrationsStatus } from "@/lib/communications-api";
+import { isSmsFeatureEnabled } from "@/lib/messaging-channels";
 import { ApiError } from "@/lib/http";
 import {
   connectWhatsApp,
@@ -49,6 +50,8 @@ export default function EntegrasyonlarPage() {
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [formError, setFormError] = useState("");
+  const isPlatformAdmin = Boolean(user.isPlatformAdmin);
+  const META_ID_PATTERN = /^\d+$/;
 
   const load = useCallback(async () => {
     if (!auth) {
@@ -76,22 +79,23 @@ export default function EntegrasyonlarPage() {
   }, [load]);
 
   function openConnect(update = false) {
+    if (!isPlatformAdmin) return;
     setFormError("");
     setAccessToken("");
-    if (update && whatsapp) {
-      setWabaId(whatsapp.wabaId);
-      setPhoneNumberId(whatsapp.phoneNumberId);
-    } else {
-      setWabaId("");
-      setPhoneNumberId("");
-    }
+    setWabaId(update && whatsapp?.wabaId ? whatsapp.wabaId : "");
+    setPhoneNumberId(update && whatsapp?.phoneNumberId ? whatsapp.phoneNumberId : "");
     setModalOpen(true);
   }
 
   async function handleConnect() {
     if (!auth || pending) return;
-    if (!wabaId.trim() || !phoneNumberId.trim() || !accessToken.trim()) {
-      setFormError("WABA ID, Phone Number ID ve Access Token zorunludur.");
+    if (!isPlatformAdmin) return;
+    if (!META_ID_PATTERN.test(wabaId.trim()) || !META_ID_PATTERN.test(phoneNumberId.trim())) {
+      setFormError("WABA ID ve Phone Number ID yalnızca rakamlardan oluşmalıdır.");
+      return;
+    }
+    if (!accessToken.trim() || accessToken.trim().length < 20) {
+      setFormError("Geçerli bir erişim anahtarı girin.");
       return;
     }
     setPending(true);
@@ -142,7 +146,9 @@ export default function EntegrasyonlarPage() {
       showToast(`Şablonlar senkronize edildi (${result.items.length} şablon, ${approved} gönderime uygun).`);
     } catch (error) {
       showToast(
-        error instanceof ApiError ? error.message : "Şablon senkronizasyonu başarısız.",
+        error instanceof ApiError
+          ? error.message
+          : "Şablonlar senkronize edilemedi. Lütfen tekrar deneyin.",
         "error",
       );
     } finally {
@@ -188,23 +194,28 @@ export default function EntegrasyonlarPage() {
           <li className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-medium text-ink">WhatsApp</p>
+              <p className="mt-1 text-sm text-muted">
+                WhatsApp Business hesabınızı bağlayarak aidat hatırlatmaları ve site duyuruları
+                gönderebilirsiniz.
+              </p>
               {connected && whatsapp ? (
                 <>
-                  <p className="mt-0.5 text-sm text-ink">
+                  <p className="mt-2 text-sm text-ink">
                     {whatsapp.verifiedName || "WhatsApp Business"}
                   </p>
                   <p className="text-[13px] text-muted">
                     {whatsapp.displayPhoneNumber || whatsapp.businessPhone || "—"}
-                  </p>
-                  <p className="mt-1 text-[12px] text-muted">
-                    Token: {whatsapp.accessTokenMasked}
                   </p>
                   {whatsapp.lastError ? (
                     <p className="mt-1 text-[12px] text-danger">{whatsapp.lastError}</p>
                   ) : null}
                 </>
               ) : (
-                <p className="text-sm text-muted">Toplu bilgilendirme ve borç hatırlatmaları.</p>
+                <p className="mt-2 text-sm text-muted">
+                  {isPlatformAdmin
+                    ? "Tek tıkla Meta bağlantısı bu ortamda henüz etkin değil. Hesabı Gelişmiş Bağlantı ile kaydedin."
+                    : "WhatsApp hesabı platform yöneticisi tarafından bağlanır. Meta ile tek tıkla bağlanma henüz etkin değil."}
+                </p>
               )}
             </div>
             <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -213,9 +224,11 @@ export default function EntegrasyonlarPage() {
               </Badge>
               <div className="flex flex-wrap justify-end gap-1.5">
                 {!connected ? (
-                  <Button size="sm" disabled={pending || loading} onClick={() => openConnect(false)}>
-                    Bağla
-                  </Button>
+                  isPlatformAdmin ? (
+                    <Button size="sm" disabled={pending || loading} onClick={() => openConnect(false)}>
+                      Gelişmiş Bağlantı
+                    </Button>
+                  ) : null
                 ) : (
                   <>
                     <Link
@@ -240,14 +253,16 @@ export default function EntegrasyonlarPage() {
                     >
                       Şablonları Senkronize Et
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={pending}
-                      onClick={() => openConnect(true)}
-                    >
-                      Ayarları Güncelle
-                    </Button>
+                    {isPlatformAdmin ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() => openConnect(true)}
+                      >
+                        Gelişmiş Bağlantı
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -261,15 +276,17 @@ export default function EntegrasyonlarPage() {
               </div>
             </div>
           </li>
-          <li className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-ink">SMS</p>
-              <p className="text-sm text-muted">Borç hatırlatmaları için kısa mesaj gönderimi.</p>
-            </div>
-            <Badge tone={status?.sms.connected ? "warning" : "neutral"}>
-              {loading ? "Yükleniyor…" : smsLabel}
-            </Badge>
-          </li>
+          {isSmsFeatureEnabled() ? (
+            <li className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-ink">SMS</p>
+                <p className="text-sm text-muted">Borç hatırlatmaları için kısa mesaj gönderimi.</p>
+              </div>
+              <Badge tone={status?.sms.connected ? "warning" : "neutral"}>
+                {loading ? "Yükleniyor…" : smsLabel}
+              </Badge>
+            </li>
+          ) : null}
           <li className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-ink">Banka</p>
@@ -322,10 +339,11 @@ export default function EntegrasyonlarPage() {
         </ul>
       </div>
 
+      {isPlatformAdmin ? (
       <FormModal
         open={modalOpen}
-        title="WhatsApp Business Bağlantısı"
-        description="Meta WhatsApp Cloud API bilgilerinizle bağlantı kurulur."
+        title="Gelişmiş WhatsApp Bağlantısı"
+        description="Yalnızca platform yöneticileri için. Kimlikler Graph API’den sayısal WABA ve telefon numarası ID’si olarak girilir; erişim anahtarı saklanır ve tekrar gösterilmez."
         icon={MessageCircle}
         size="md"
         onClose={() => (pending ? undefined : setModalOpen(false))}
@@ -344,41 +362,54 @@ export default function EntegrasyonlarPage() {
           <FormField label="WABA ID" required>
             <Input
               value={wabaId}
-              onChange={(e) => setWabaId(e.target.value)}
-              placeholder="WhatsApp Business Account ID"
+              onChange={(e) => setWabaId(e.target.value.replace(/\D/g, ""))}
+              placeholder="Sayısal hesap kimliği"
+              inputMode="numeric"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              name="wa-waba-id"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
               data-modal-autofocus
             />
           </FormField>
           <FormField label="Phone Number ID" required>
             <Input
               value={phoneNumberId}
-              onChange={(e) => setPhoneNumberId(e.target.value)}
-              placeholder="Phone Number ID"
+              onChange={(e) => setPhoneNumberId(e.target.value.replace(/\D/g, ""))}
+              placeholder="Sayısal telefon kimliği"
+              inputMode="numeric"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              name="wa-cloud-number-id"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
             />
           </FormField>
           <FormField
             label="Access Token"
             required
-            hint={
-              whatsapp
-                ? `Mevcut token: ${whatsapp.accessTokenMasked}. Yeni token girin; eski token tekrar gösterilmez.`
-                : "Token kaydedildikten sonra tekrar gösterilmez."
-            }
+            hint="Anahtar kaydedildikten sonra tekrar gösterilmez. Yanıttan da dönmez."
           >
             <Input
               type="password"
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
-              placeholder="Meta access token"
-              autoComplete="off"
+              placeholder="Meta erişim anahtarı"
+              autoComplete="new-password"
+              name="wa-access-token"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
           </FormField>
-          <p className="text-[12px] text-muted">
-            Meta WhatsApp Cloud API bilgilerinizle bağlantı kurulur.
-          </p>
           {formError ? <p className="text-[13px] text-danger">{formError}</p> : null}
         </div>
       </FormModal>
+      ) : null}
     </PageContainer>
   );
 }

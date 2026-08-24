@@ -7,6 +7,10 @@ export type SessionUser = {
   tenantId?: string;
   tenantName?: string;
   isPlatformAdmin?: boolean;
+  role?: string;
+  permissions?: string[];
+  allSites?: boolean;
+  siteIds?: string[] | null;
 };
 
 export type SessionState = {

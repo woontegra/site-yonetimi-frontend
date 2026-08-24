@@ -23,6 +23,9 @@ export function SetupIncompleteBanner() {
     setLoading(true);
     try {
       const summary = await getSetupSummary(auth);
+      if (summary.site.id !== siteId) {
+        return;
+      }
       setSetupStatus(summary.site.setupStatus);
     } catch {
       setSetupStatus(null);

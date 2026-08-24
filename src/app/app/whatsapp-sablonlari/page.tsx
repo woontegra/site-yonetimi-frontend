@@ -79,7 +79,7 @@ export default function WhatsAppSablonlariPage() {
     setLoadingMine(true);
     try {
       const result = await listMyWhatsAppTemplates(auth);
-      setMine(result.items);
+      setMine(result.items.filter((item) => !item.name.toLowerCase().startsWith("mk_")));
     } catch (error) {
       showToast(error instanceof ApiError ? error.message : "Şablonlar yüklenemedi.", "error");
       setMine([]);
@@ -108,7 +108,9 @@ export default function WhatsAppSablonlariPage() {
       await loadMine();
     } catch (error) {
       showToast(
-        error instanceof ApiError ? error.message : "Senkronizasyon başarısız.",
+        error instanceof ApiError
+          ? error.message
+          : "Şablonlar senkronize edilemedi. Lütfen tekrar deneyin.",
         "error",
       );
     } finally {

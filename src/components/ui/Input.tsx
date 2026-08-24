@@ -1,8 +1,9 @@
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, Ref } from "react";
 import { cn } from "@/lib/cn";
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   invalid?: boolean;
+  ref?: Ref<HTMLInputElement>;
 };
 
 export function Input({ className, invalid = false, ...props }: InputProps) {
@@ -10,7 +11,7 @@ export function Input({ className, invalid = false, ...props }: InputProps) {
     <input
       aria-invalid={invalid || undefined}
       className={cn(
-        "box-border h-10 w-full min-w-0 max-w-full rounded-md border bg-surface px-3 text-sm font-normal text-ink placeholder:text-muted/80",
+        "pointer-events-auto box-border h-10 w-full min-w-0 max-w-full rounded-md border bg-surface px-3 text-sm font-normal tracking-normal text-ink placeholder:text-muted/80",
         "ring-2 ring-transparent transition-[border-color,box-shadow,background-color] duration-micro",
         invalid
           ? "border-danger focus:border-danger focus:ring-danger/15"

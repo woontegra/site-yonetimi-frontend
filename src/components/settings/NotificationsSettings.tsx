@@ -6,6 +6,7 @@ import { SectionCard, SurfaceCard } from "@/components/ui/SurfaceCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MessageTemplatesSettings } from "@/components/settings/MessageTemplatesSettings";
 import { useApiAuth } from "@/lib/active-site-context";
+import { isSmsFeatureEnabled } from "@/lib/messaging-channels";
 import { getWhatsAppIntegration } from "@/lib/whatsapp-api";
 
 export function NotificationsSettings() {
@@ -53,7 +54,14 @@ export function NotificationsSettings() {
         </div>
       </SurfaceCard>
 
-      <SectionCard title="Mesaj şablonları" description="WhatsApp ve SMS borç hatırlatma şablonları.">
+      <SectionCard
+        title="Mesaj şablonları"
+        description={
+          isSmsFeatureEnabled()
+            ? "WhatsApp ve SMS borç hatırlatma şablonları."
+            : "WhatsApp borç hatırlatma şablonları."
+        }
+      >
         <MessageTemplatesSettings />
       </SectionCard>
     </div>

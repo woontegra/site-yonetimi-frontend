@@ -10,6 +10,22 @@ import { UserMenu } from "@/components/layout/UserMenu";
 import { SetupIncompleteBanner } from "@/components/setup/SetupIncompleteBanner";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/lib/auth-context";
+import { useActiveSite } from "@/lib/active-site-context";
+
+function SiteScopedMain({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const { siteId } = useActiveSite();
+  const keepMounted =
+    pathname === "/app/siteler" ||
+    pathname.startsWith("/app/siteler/") ||
+    pathname.startsWith("/app/admin");
+  const scopeKey = keepMounted ? "shared" : siteId ?? "none";
+  return (
+    <div key={scopeKey} className="contents">
+      {children}
+    </div>
+  );
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -121,7 +137,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {adminMode ? null : <SetupIncompleteBanner />}
 
-        <main className="min-w-0 w-full flex-1">{children}</main>
+        <main className="min-w-0 w-full flex-1">
+          <SiteScopedMain>{children}</SiteScopedMain>
+        </main>
       </div>
     </div>
   );

@@ -54,9 +54,9 @@ export type WhatsAppIntegration = {
 
   id: string;
 
-  wabaId: string;
+  wabaId?: string;
 
-  phoneNumberId: string;
+  phoneNumberId?: string;
 
   businessPhone: string | null;
 
@@ -64,7 +64,7 @@ export type WhatsAppIntegration = {
 
   verifiedName: string | null;
 
-  accessTokenMasked: string;
+  accessTokenMasked?: string;
 
   apiVersion: string;
 

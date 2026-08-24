@@ -31,8 +31,13 @@ export type SiteListResponse = {
 export function readSiteCounts(site: Site): { buildings: number; apartments: number } {
   return {
     buildings: site.buildingCount ?? 0,
-    apartments: site.apartmentCount ?? 0,
+    apartments: site.apartmentCount ?? site.activeApartmentCount ?? 0,
   };
+}
+
+export function setupWizardActionLabel(status?: SetupStatus): string {
+  if (status === "COMPLETED" || status === "SKIPPED") return "Kurulum Sihirbazı";
+  return "Kuruluma Devam Et";
 }
 
 export type SitePayload = {
