@@ -243,6 +243,9 @@ export function AdminIntegrationsPage() {
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
       await loadEmail();
+      if (err instanceof ApiError && err.message.includes("SMTP şifresi çözülemedi")) {
+        openForm();
+      }
     } finally {
       setPending(false);
     }
@@ -532,7 +535,7 @@ export function AdminIntegrationsPage() {
           <FormField
             label="SMTP şifresi / uygulama şifresi"
             required={!email?.hasPassword}
-            hint="Normal e-posta hesabı şifreniz yerine sağlayıcınız destekliyorsa uygulama şifresi kullanın. Boş bırakırsanız kayıtlı şifre korunur."
+            hint="Boş bırakırsanız eski şifre korunur. Çözme hatası görürseniz Gmail uygulama şifresini buraya yeniden yazıp kaydedin; ardından Bağlantıyı Test Et."
             className="sm:col-span-2"
           >
             <Input
