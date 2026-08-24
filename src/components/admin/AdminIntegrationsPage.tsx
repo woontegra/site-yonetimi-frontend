@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Mail } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -92,6 +92,7 @@ export function AdminIntegrationsPage() {
   const [formError, setFormError] = useState("");
   const [pending, setPending] = useState(false);
   const [testRecipient, setTestRecipient] = useState("");
+  const smtpPasswordRef = useRef<HTMLInputElement>(null);
 
   const [deliveries, setDeliveries] = useState<EmailDelivery[]>([]);
   const [deliveryTotal, setDeliveryTotal] = useState(0);
@@ -201,6 +202,12 @@ export function AdminIntegrationsPage() {
 
   async function saveEmail() {
     if (!auth || pending) return;
+    const smtpPassword = (smtpPasswordRef.current?.value ?? form.smtpPassword).trim();
+    const mustSetPassword = email?.passwordDecryptable === false || !email?.hasPassword;
+    if (mustSetPassword && !smtpPassword) {
+      setFormError("Kayıtlı SMTP şifresi kullanılamıyor. Gmail uygulama şifresini bu alana yazıp kaydedin.");
+      return;
+    }
     setPending(true);
     setFormError("");
     try {
@@ -212,11 +219,13 @@ export function AdminIntegrationsPage() {
         smtpPort: Number(form.smtpPort),
         smtpSecurity: form.smtpSecurity,
         smtpUsername: form.smtpUsername.trim(),
-        smtpPassword: form.smtpPassword.trim() || undefined,
+        smtpPassword: smtpPassword || undefined,
         notificationEmail: form.notificationEmail.trim(),
         isActive: form.isActive,
       });
       setEmail(result.integration);
+      setForm({ ...form, smtpPassword: "" });
+      if (smtpPasswordRef.current) smtpPasswordRef.current.value = "";
       setFormOpen(false);
       showToast(
         result.passwordUpdated
@@ -225,6 +234,16 @@ export function AdminIntegrationsPage() {
             ? `Ayarlar kaydedildi. ${result.securityWarning}`
             : "E-posta ayarları kaydedildi. Bağlantıyı ayrıca test edin.",
       );
+      if (result.passwordUpdated && result.integration.passwordDecryptable !== false) {
+        const test = await testAdminEmailConnection(auth);
+        if (test.ok) {
+          showToast("SMTP bağlantısı doğrulandı.");
+          setEmail(test.integration);
+        } else {
+          showToast(test.integration.lastErrorSummary || "SMTP kaydedildi ancak bağlantı başarısız.", "error");
+        }
+      }
+      await loadDeliveries();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Ayarlar kaydedilemedi.");
     } finally {
@@ -294,7 +313,7 @@ export function AdminIntegrationsPage() {
             className="w-full"
             size="sm"
             variant="secondary"
-            disabled={pending || !email}
+            disabled={pending || !email || email.passwordDecryptable === false}
             onClick={() =>
               void runEmailAction(async () => {
                 const result = await testAdminEmailConnection(auth!);
@@ -304,6 +323,11 @@ export function AdminIntegrationsPage() {
           >
             Bağlantıyı Test Et
           </Button>
+          {email?.passwordDecryptable === false ? (
+            <p className="sm:col-span-2 text-sm text-danger">
+              Kayıtlı SMTP şifresi çözülemiyor. Düzenle’den uygulama şifresini yeniden yazıp kaydedin; Test Connection eski kaydı kullanır.
+            </p>
+          ) : null}
           <Button className="w-full" size="sm" variant="secondary" disabled={pending || !email} onClick={() => setTestOpen(true)}>
             Test E-postası Gönder
           </Button>
@@ -500,11 +524,20 @@ export function AdminIntegrationsPage() {
         footer={
           <>
             <Button variant="secondary" disabled={pending} onClick={() => setFormOpen(false)}>İptal</Button>
-            <Button disabled={pending} onClick={() => void saveEmail()}>{pending ? "Kaydediliyor…" : "Kaydet"}</Button>
+            <Button type="submit" form="smtp-email-form" disabled={pending}>
+              {pending ? "Kaydediliyor…" : "Kaydet"}
+            </Button>
           </>
         }
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <form
+          id="smtp-email-form"
+          className="grid gap-3 sm:grid-cols-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveEmail();
+          }}
+        >
           <FormField label="Gönderici adı" required>
             <Input value={form.senderName} onChange={(e) => setForm({ ...form, senderName: e.target.value })} data-modal-autofocus />
           </FormField>
@@ -530,19 +563,21 @@ export function AdminIntegrationsPage() {
             </Select>
           </FormField>
           <FormField label="SMTP kullanıcı adı" required>
-            <Input value={form.smtpUsername} onChange={(e) => setForm({ ...form, smtpUsername: e.target.value })} autoComplete="off" />
+            <Input value={form.smtpUsername} onChange={(e) => setForm({ ...form, smtpUsername: e.target.value })} autoComplete="username" name="smtp-username" />
           </FormField>
           <FormField
             label="SMTP şifresi / uygulama şifresi"
-            required={!email?.hasPassword}
-            hint="Boş bırakırsanız eski şifre korunur. Çözme hatası görürseniz Gmail uygulama şifresini buraya yeniden yazıp kaydedin; ardından Bağlantıyı Test Et."
+            required={email?.passwordDecryptable === false || !email?.hasPassword}
+            hint="Gmail uygulama şifresini yazın. Placeholder eski şifreyi göndermez; alanı gerçekten doldurmanız gerekir."
             className="sm:col-span-2"
           >
             <Input
+              ref={smtpPasswordRef}
               type="password"
+              name="smtpPassword"
               value={form.smtpPassword}
               onChange={(e) => setForm({ ...form, smtpPassword: e.target.value })}
-              placeholder={email?.hasPassword ? "••••••••" : ""}
+              placeholder={email?.hasPassword ? "Uygulama şifresini yeniden girin" : ""}
               autoComplete="new-password"
             />
           </FormField>
@@ -555,10 +590,10 @@ export function AdminIntegrationsPage() {
             Aktif
           </label>
           <p className="text-[12px] text-muted sm:col-span-2">
-            Kaydetmek bağlantının çalıştığı anlamına gelmez. Ayrı olarak “Bağlantıyı Test Et” kullanın.
+            Kaydettikten sonra bağlantı otomatik test edilir.
           </p>
           {formError ? <p className="text-[13px] text-danger sm:col-span-2">{formError}</p> : null}
-        </div>
+        </form>
       </FormModal>
 
       <Modal

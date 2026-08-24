@@ -471,6 +471,7 @@ export type PlatformEmailIntegration = {
   smtpSecurity: "SSL_TLS" | "STARTTLS";
   smtpUsername: string;
   hasPassword: boolean;
+  passwordDecryptable?: boolean;
   isActive: boolean;
   status: "UNCONFIGURED" | "READY" | "ERROR" | "INACTIVE";
   publicStatus: "READY" | "UNCONFIGURED" | "ERROR" | "INACTIVE";
