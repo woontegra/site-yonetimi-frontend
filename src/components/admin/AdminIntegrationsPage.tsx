@@ -212,16 +212,18 @@ export function AdminIntegrationsPage() {
         smtpPort: Number(form.smtpPort),
         smtpSecurity: form.smtpSecurity,
         smtpUsername: form.smtpUsername.trim(),
-        smtpPassword: form.smtpPassword || undefined,
+        smtpPassword: form.smtpPassword.trim() || undefined,
         notificationEmail: form.notificationEmail.trim(),
         isActive: form.isActive,
       });
       setEmail(result.integration);
       setFormOpen(false);
       showToast(
-        result.securityWarning
-          ? `Ayarlar kaydedildi. ${result.securityWarning}`
-          : "E-posta ayarları kaydedildi. Bağlantıyı ayrıca test edin.",
+        result.passwordUpdated
+          ? "E-posta ayarları kaydedildi. SMTP şifresi güncellendi."
+          : result.securityWarning
+            ? `Ayarlar kaydedildi. ${result.securityWarning}`
+            : "E-posta ayarları kaydedildi. Bağlantıyı ayrıca test edin.",
       );
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Ayarlar kaydedilemedi.");

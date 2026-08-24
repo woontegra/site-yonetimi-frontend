@@ -48,6 +48,7 @@ export function AdminSystemPage() {
             <StatCard label="API" value={data.api.status === "ok" ? "Çalışıyor" : data.api.status} />
             <StatCard label="Veritabanı" value={data.database.reachable ? "Erişilebilir" : "Yok"} />
             <StatCard label="WhatsApp modu" value={data.whatsappProviderMode} />
+            <StatCard label="E-posta modu" value={data.emailProviderMode ?? data.encryption?.emailProviderMode ?? "—"} />
             <StatCard label="Ortam" value={data.environment} />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -64,6 +65,27 @@ export function AdminSystemPage() {
                 <StatusBadge status="failed" label={`Hata ${data.integrations.whatsappError}`} />
               </div>
             </SurfaceCard>
+            {data.encryption ? (
+              <SurfaceCard className="lg:col-span-2">
+                <h2 className="text-section text-ink">Şifreleme anahtarı (güvenli özet)</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Encrypt kaynağı: {data.encryption.encryptUses ?? "yok"}. Anahtar veya SMTP şifresi gösterilmez.
+                </p>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {data.encryption.keys.map((item) => (
+                    <li key={item.name} className="break-words rounded-md border border-line bg-slate-50 px-3 py-2">
+                      <span className="font-medium">{item.name}</span>
+                      {item.present
+                        ? ` · uzunluk ${item.length} · fp ${item.fingerprint ?? "—"}`
+                        : " · tanımsız"}
+                      {item.wrappingQuotes ? " · sarmalayıcı tırnak var" : ""}
+                      {item.leadingOrTrailingWhitespace ? " · baş/son boşluk var" : ""}
+                      {item.containsNewline ? " · satır sonu var" : ""}
+                    </li>
+                  ))}
+                </ul>
+              </SurfaceCard>
+            ) : null}
           </div>
         </>
       )}

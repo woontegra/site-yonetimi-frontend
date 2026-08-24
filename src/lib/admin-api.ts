@@ -221,6 +221,20 @@ export type AdminSystemStatus = {
   database: { reachable: boolean };
   environment: string;
   whatsappProviderMode: string;
+  emailProviderMode?: string;
+  encryption?: {
+    emailProviderMode: string;
+    encryptUses: string | null;
+    keys: Array<{
+      name: string;
+      present: boolean;
+      length: number;
+      wrappingQuotes: boolean;
+      leadingOrTrailingWhitespace: boolean;
+      containsNewline: boolean;
+      fingerprint: string | null;
+    }>;
+  };
   lastMigration: { name: string; finishedAt: string | null } | null;
   integrations: { whatsappTotal: number; whatsappConnected: number; whatsappError: number };
 };
@@ -538,7 +552,11 @@ export function upsertAdminEmailIntegration(
     isActive: boolean;
   },
 ) {
-  return apiRequest<{ integration: PlatformEmailIntegration; securityWarning: string | null }>(
+  return apiRequest<{
+    integration: PlatformEmailIntegration;
+    securityWarning: string | null;
+    passwordUpdated?: boolean;
+  }>(
     "/api/admin/email-integration",
     { ...auth, method: "PUT", body: JSON.stringify(body) },
   );
