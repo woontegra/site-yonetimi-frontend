@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Check, Link2, Pencil } from "lucide-react";
+import { ApartmentCombobox } from "@/components/apartments/ApartmentCombobox";
 import { SiteContextField } from "@/components/sites/SiteContextField";
 import { SiteSelect } from "@/components/sites/SiteSelect";
 import { Button } from "@/components/ui/Button";
@@ -288,22 +289,14 @@ export function RelationFormModal({
             </FormField>
 
             <FormField label="Daire" htmlFor="relation-apartment" required error={errors.apartmentId}>
-              <Select
+              <ApartmentCombobox
                 id="relation-apartment"
+                apartments={apartments}
                 value={values.apartmentId}
-                invalid={Boolean(errors.apartmentId)}
                 disabled={lockApartment || !values.buildingId}
-                onChange={(event) => update("apartmentId", event.target.value)}
-              >
-                <option value="">
-                  {values.buildingId ? "Daire seçin" : "Önce bina seçin"}
-                </option>
-                {apartments.map((apartment) => (
-                  <option key={apartment.id} value={apartment.id}>
-                    Daire {apartment.number}
-                  </option>
-                ))}
-              </Select>
+                invalid={Boolean(errors.apartmentId)}
+                onChange={(apartmentId) => update("apartmentId", apartmentId)}
+              />
             </FormField>
 
             {lockPerson || isEdit ? (

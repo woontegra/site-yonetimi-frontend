@@ -43,9 +43,9 @@ export const EXPENSE_STATUS_LABELS = {
 
 export const BANK_MATCH_STATUS_LABELS = {
   UNMATCHED: "Eşleşmedi",
-  SUGGESTED: "Öneri",
-  MATCHED: "Eşleşti",
-  PROCESSED: "İşlendi",
+  SUGGESTED: "Otomatik Eşleşti",
+  MATCHED: "Manuel Eşleşti",
+  PROCESSED: "Tahsilata Aktarıldı",
 } as const;
 
 export const BANK_DIRECTION_LABELS = {

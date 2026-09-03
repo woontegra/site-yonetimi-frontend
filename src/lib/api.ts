@@ -2,6 +2,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4100";
 
 type LoginResponse = {
   token: string;
+  refreshToken?: string;
+  expiresIn?: number;
   user: {
     id: string;
     email: string;

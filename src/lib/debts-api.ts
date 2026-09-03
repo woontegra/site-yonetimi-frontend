@@ -66,6 +66,7 @@ export type DebtListParams = {
   perPage?: number;
   buildingId?: string;
   apartmentId?: string;
+  duesDefinitionId?: string;
   type?: DebtType;
   status?: DebtStatus;
   periodYear?: number;
@@ -81,6 +82,7 @@ export function listApartmentDebts(auth: AuthContext, params: DebtListParams = {
   if (params.perPage) query.set("perPage", String(params.perPage));
   if (params.buildingId) query.set("buildingId", params.buildingId);
   if (params.apartmentId) query.set("apartmentId", params.apartmentId);
+  if (params.duesDefinitionId) query.set("duesDefinitionId", params.duesDefinitionId);
   if (params.type) query.set("type", params.type);
   if (params.status) query.set("status", params.status);
   if (params.periodYear) query.set("periodYear", String(params.periodYear));

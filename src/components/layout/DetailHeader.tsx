@@ -10,6 +10,7 @@ type DetailHeaderProps = {
   description?: ReactNode;
   status?: ReactNode;
   actions?: ReactNode;
+  leading?: ReactNode;
 };
 
 export function DetailHeader({
@@ -19,6 +20,7 @@ export function DetailHeader({
   description,
   status,
   actions,
+  leading,
 }: DetailHeaderProps) {
   return (
     <div className="mb-5">
@@ -30,12 +32,17 @@ export function DetailHeader({
         {backLabel}
       </Link>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h1 className="min-w-0 break-words text-page text-ink">{title}</h1>
-            {status}
+        <div className="flex min-w-0 items-start gap-3">
+          {leading ? <div className="shrink-0">{leading}</div> : null}
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h1 className="min-w-0 break-words text-page text-ink">{title}</h1>
+              {status}
+            </div>
+            {description ? (
+              <div className="mt-1 min-w-0 break-words text-sm text-muted">{description}</div>
+            ) : null}
           </div>
-          {description ? <div className="mt-1 min-w-0 break-words text-sm text-muted">{description}</div> : null}
         </div>
         {actions ? <div className="action-stack">{actions}</div> : null}
       </div>

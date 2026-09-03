@@ -302,24 +302,38 @@ export function SiteSetupWizard({
       }
 
       const refreshedBefore = summary ?? (await getSetupSummary(auth));
+      // Yalnız canlı binalar (API zaten deletedAt:null döner); ada değil ID öncelikli.
+      const activeBuildings = refreshedBefore.buildings;
       const buildingIdByName = new Map(
-        refreshedBefore.buildings.map((b) => [b.name.toLowerCase(), b.id]),
+        activeBuildings.map((b) => [b.name.trim().toLowerCase(), b.id]),
       );
+      const soleActiveBuildingId =
+        activeBuildings.length === 1 ? activeBuildings[0]?.id : undefined;
+
+      let apartmentsCreated = 0;
+      let apartmentsSkipped = 0;
+      let buildingsCreated = 0;
 
       for (const [buildingName, rows] of byBuilding) {
-        let buildingId = buildingIdByName.get(buildingName.toLowerCase());
+        // Tek bina grubu + sitede tek aktif bina → ada eşleşmesine bakmadan o binaya bağla.
+        // (Örn. villa adı "… Bağımsız Bölümler" ile mevcut "B Blok" ayrışmasın.)
+        let buildingId =
+          soleActiveBuildingId && byBuilding.size === 1
+            ? soleActiveBuildingId
+            : buildingIdByName.get(buildingName.trim().toLowerCase());
 
         if (!buildingId) {
           const created = await bulkCreateBuildings(auth, [{ name: buildingName }]);
           buildingId = created.buildings[0]?.id;
           if (buildingId) {
-            buildingIdByName.set(buildingName.toLowerCase(), buildingId);
+            buildingIdByName.set(buildingName.trim().toLowerCase(), buildingId);
+            buildingsCreated += 1;
           }
         }
 
         if (!buildingId) continue;
 
-        await bulkCreateApartments(
+        const result = await bulkCreateApartments(
           auth,
           buildingId,
           rows.map((r) => ({
@@ -328,9 +342,22 @@ export function SiteSetupWizard({
             roomType: r.roomType.trim() || null,
           })),
         );
+        apartmentsCreated += result.created;
+        apartmentsSkipped += result.skipped;
       }
 
-      showToast("Yapı oluşturuldu.");
+      if (apartmentsCreated === 0 && apartmentsSkipped === 0) {
+        setError("Hiç daire oluşturulamadı. Bina seçimini kontrol edin.");
+        await loadSummary();
+        return;
+      }
+
+      showToast(
+        `${apartmentsCreated} daire kaydı oluşturuldu` +
+          (apartmentsSkipped ? `, ${apartmentsSkipped} atlandı` : "") +
+          (buildingsCreated ? `, ${buildingsCreated} bina eklendi` : "") +
+          ".",
+      );
       setPreviewRows([]);
       await loadSummary();
     } catch (err) {

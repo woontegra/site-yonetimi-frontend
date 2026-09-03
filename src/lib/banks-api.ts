@@ -295,3 +295,160 @@ export function deleteBankMatchingRule(auth: AuthContext, id: string) {
     method: "DELETE",
   });
 }
+
+export type BankHubSummary = {
+  accounts: number;
+  pendingMatch: number;
+  unmatched: number;
+  processedThisMonth: number;
+};
+
+export type StatementPreviewMatch = {
+  apartmentId: string | null;
+  personId: string | null;
+  buildingId: string | null;
+  matchStatus: "UNMATCHED" | "SUGGESTED";
+  confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+  reason: string;
+  candidateCount: number;
+};
+
+export type StatementPreviewRow = {
+  rowIndex: number;
+  transactionDate: string;
+  valueDate?: string | null;
+  direction: BankDirection;
+  amount: number;
+  description: string;
+  referenceNo?: string | null;
+  balanceAfter?: number | null;
+  sourceRowNumber?: number;
+  sourcePage?: number | null;
+  fingerprint: string;
+  previewStatus: "READY" | "DUPLICATE" | "INVALID" | "DEBIT_SKIP_PAYMENT" | "AMBIGUOUS";
+  match: StatementPreviewMatch | null;
+  suggestedPattern: string | null;
+  message: string;
+  allocationPreview?: Array<{ apartmentDebtId: string; label: string; amount: string }>;
+  allocationRemainder?: string;
+  canAutoProcess?: boolean;
+};
+
+export type StatementPreviewResponse = {
+  summary: {
+    totalRows: number;
+    creditCount: number;
+    debitCount: number;
+    invalidCount: number;
+    duplicateCount: number;
+    autoMatchedCount: number;
+    unmatchedCount: number;
+    importableCreditTotal: string;
+  };
+  rows: StatementPreviewRow[];
+};
+
+export type StatementCommitRow = {
+  transactionDate: string;
+  valueDate?: string | null;
+  direction: BankDirection;
+  amount: number;
+  description: string;
+  referenceNo?: string | null;
+  balanceAfter?: number | null;
+  sourceRowNumber?: number;
+  fingerprint?: string;
+  matchedApartmentId?: string | null;
+  matchedPersonId?: string | null;
+  processPayment?: boolean;
+  createRule?: boolean;
+  containsText?: string | null;
+  ruleName?: string | null;
+  skip?: boolean;
+};
+
+export type StatementCommitResponse = {
+  createdCount: number;
+  duplicateSkipped: number;
+  processedPayments: number;
+  matchedWithoutPayment: number;
+  createdIds: string[];
+};
+
+export type BankColumnMapping = {
+  date: string;
+  description: string;
+  amount?: string | null;
+  debit?: string | null;
+  credit?: string | null;
+  reference?: string | null;
+  balance?: string | null;
+  valueDate?: string | null;
+};
+
+export type BankColumnTemplate = {
+  id: string;
+  name: string;
+  mapping: BankColumnMapping;
+  createdAt: string;
+  updatedAt: string;
+  bankAccount: { id: string; bankName: string; accountName: string } | null;
+};
+
+export function getBankHubSummary(auth: AuthContext) {
+  return apiRequest<{ summary: BankHubSummary }>("/api/bank-transactions/summary/hub", auth);
+}
+
+export function previewBankStatementImport(
+  auth: AuthContext,
+  payload: { bankAccountId: string; rows: StatementCommitRow[] },
+) {
+  return apiRequest<StatementPreviewResponse>("/api/bank-transactions/import/preview", {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function commitBankStatementImport(
+  auth: AuthContext,
+  payload: { bankAccountId: string; rows: StatementCommitRow[] },
+) {
+  return apiRequest<StatementCommitResponse>("/api/bank-transactions/import/commit", {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function unmatchBankTransaction(auth: AuthContext, id: string) {
+  return apiRequest<{ bankTransaction: BankTransaction }>(`/api/bank-transactions/${id}/unmatch`, {
+    ...auth,
+    method: "POST",
+  });
+}
+
+export function listBankColumnTemplates(auth: AuthContext, bankAccountId?: string) {
+  const query = new URLSearchParams();
+  if (bankAccountId) query.set("bankAccountId", bankAccountId);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return apiRequest<{ items: BankColumnTemplate[] }>(`/api/bank-column-templates${suffix}`, auth);
+}
+
+export function createBankColumnTemplate(
+  auth: AuthContext,
+  payload: { name: string; bankAccountId?: string | null; mapping: BankColumnMapping },
+) {
+  return apiRequest<{ template: BankColumnTemplate }>("/api/bank-column-templates", {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteBankColumnTemplate(auth: AuthContext, id: string) {
+  return apiRequest<{ ok: boolean }>(`/api/bank-column-templates/${id}`, {
+    ...auth,
+    method: "DELETE",
+  });
+}

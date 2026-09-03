@@ -12,13 +12,15 @@ import {
   siteToForm,
   type SiteFormValues,
 } from "@/components/sites/SiteFormModal";
-import { SitesTable } from "@/components/sites/SitesTable";
+import { SitesCatalog, ViewModeToggle, type SitesViewMode } from "@/components/sites/SitesCatalog";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Select } from "@/components/ui/Select";
+import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { useToast } from "@/components/ui/Toast";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
@@ -50,6 +52,8 @@ const EMPTY_COUNTS: SiteDeleteCounts = {
 
 const PER_PAGE = 20;
 
+type StatusFilter = "hepsi" | "aktif" | "pasif";
+
 export function SitesPage() {
   const { ready, user } = useAuth();
   const { showToast } = useToast();
@@ -60,6 +64,8 @@ export function SitesPage() {
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("hepsi");
+  const [view, setView] = useState<SitesViewMode>("cards");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<Site[]>([]);
   const [total, setTotal] = useState(0);
@@ -95,6 +101,7 @@ export function SitesPage() {
         search: debouncedSearch.trim() || undefined,
         page,
         perPage: PER_PAGE,
+        status: statusFilter,
       });
       setItems(result.items);
       setTotal(result.total);
@@ -105,7 +112,7 @@ export function SitesPage() {
     } finally {
       setLoading(false);
     }
-  }, [auth, ready, debouncedSearch, page]);
+  }, [auth, ready, debouncedSearch, page, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -113,7 +120,7 @@ export function SitesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, statusFilter]);
 
   function openCreate() {
     setEditing(null);
@@ -242,26 +249,48 @@ export function SitesPage() {
       <PageHeader
         title="Siteler"
         description="Yönettiğiniz siteleri görüntüleyin ve düzenleyin."
-        search={
-          <SearchInput
-            placeholder="Site ara..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        }
         actions={
-          <Button type="button" className="w-full sm:w-auto" onClick={openCreate}>
-            <Plus className="size-4" />
-            Yeni Site
-          </Button>
+          canOpenWizard ? (
+            <Button type="button" className="w-full sm:w-auto" onClick={openCreate}>
+              <Plus className="size-4" />
+              Yeni Site
+            </Button>
+          ) : null
         }
       />
 
+      <SurfaceCard padding="sm" className="mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="w-full min-w-0 sm:max-w-xs">
+              <SearchInput
+                placeholder="Site ara..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                aria-label="Site ara"
+              />
+            </div>
+            <Select
+              className="h-10 w-full sm:w-44"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+              aria-label="Durum filtresi"
+            >
+              <option value="hepsi">Tümü</option>
+              <option value="aktif">Aktif</option>
+              <option value="pasif">Pasif / Arşivlenmiş</option>
+            </Select>
+          </div>
+          <ViewModeToggle value={view} onChange={setView} />
+        </div>
+      </SurfaceCard>
+
       {listError ? <p className="mb-4 text-sm text-danger">{listError}</p> : null}
 
-      <SitesTable
+      <SitesCatalog
         items={items}
         loading={loading}
+        view={view}
         canOpenWizard={canOpenWizard}
         canManage={canOpenWizard}
         onEdit={openEdit}

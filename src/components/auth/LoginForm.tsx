@@ -38,6 +38,12 @@ function LoginFields() {
   const redirectedRef = useRef(false);
 
   useEffect(() => {
+    if (searchParams.get("reason") === "session_expired") {
+      setError("Oturumunuz sona erdi. Lütfen yeniden giriş yapın.");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (redirectedRef.current) return;
     const existing = readSession();
     if (!existing?.token || existing.user.id === "preview") return;
@@ -64,6 +70,7 @@ function LoginFields() {
       const result = await apiLogin(email, password);
       writeSession({
         token: result.token,
+        refreshToken: result.refreshToken ?? null,
         user: {
           id: result.user.id,
           email: result.user.email,

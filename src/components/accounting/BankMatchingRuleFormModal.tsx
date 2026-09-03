@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Check, Filter } from "lucide-react";
+import { ApartmentCombobox } from "@/components/apartments/ApartmentCombobox";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { FormModal } from "@/components/ui/FormModal";
@@ -248,21 +249,13 @@ export function BankMatchingRuleFormModal({
               </Select>
             </FormField>
             <FormField label="Daire" htmlFor="br-apartment">
-              <Select
+              <ApartmentCombobox
                 id="br-apartment"
+                apartments={apartments}
                 value={values.apartmentId}
                 disabled={!values.buildingId}
-                onChange={(event) =>
-                  setValues((c) => ({ ...c, apartmentId: event.target.value }))
-                }
-              >
-                <option value="">Seçilmedi</option>
-                {apartments.map((apartment) => (
-                  <option key={apartment.id} value={apartment.id}>
-                    {apartment.number}
-                  </option>
-                ))}
-              </Select>
+                onChange={(apartmentId) => setValues((c) => ({ ...c, apartmentId }))}
+              />
             </FormField>
             <FormField label="Kişi" htmlFor="br-person">
               <Select

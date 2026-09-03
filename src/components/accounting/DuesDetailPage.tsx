@@ -1,24 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import {
+  Building2,
+  CircleDollarSign,
+  DoorOpen,
+  Receipt,
+  Wallet,
+} from "lucide-react";
+import { DuesChargeModal } from "@/components/accounting/DuesChargeModal";
 import {
   DuesFormModal,
   duesFormToPayload,
   duesToForm,
   type DuesFormValues,
 } from "@/components/accounting/DuesFormModal";
+import {
+  DUES_ASSESSMENT_STATUS_LABELS,
+  deriveDuesAssessmentStatus,
+} from "@/components/accounting/dues-status";
+import { DetailHeader } from "@/components/layout/DetailHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Modal } from "@/components/ui/Modal";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { Select } from "@/components/ui/Select";
+import { SectionCard, StatCard, SurfaceCard } from "@/components/ui/SurfaceCard";
+import { Table, TableElement, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/Toast";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
 import { useApiAuth } from "@/lib/active-site-context";
-import { listBuildings, type Building } from "@/lib/buildings-api";
+import {
+  listApartmentDebts,
+  type ApartmentDebt,
+  type DebtStatus,
+} from "@/lib/debts-api";
 import {
   cancelOpenDuesDebts,
   chargeDues,
@@ -29,25 +50,38 @@ import {
   type DuesDefinition,
 } from "@/lib/dues-api";
 import { ApiError } from "@/lib/http";
-import { formatDateTr, formatMoney, formatPeriodLong } from "@/lib/money";
+import {
+  DEBT_STATUS_LABELS,
+  formatDateTr,
+  formatMoney,
+  formatPeriodLong,
+} from "@/lib/money";
 
-function InfoItem({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm text-ink">{value}</dd>
-    </div>
-  );
+function statusTone(status: ReturnType<typeof deriveDuesAssessmentStatus>) {
+  switch (status) {
+    case "DEFINED":
+      return "info" as const;
+    case "CHARGED":
+      return "brand" as const;
+    case "PARTIAL":
+      return "warning" as const;
+    case "COMPLETED":
+      return "success" as const;
+    case "OVERDUE":
+      return "danger" as const;
+    default:
+      return "neutral" as const;
+  }
 }
 
 export function DuesDetailPage() {
   const params = useParams<{ id: string }>();
+  const duesId = String(params.id);
   const { ready } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth();
 
   const [dues, setDues] = useState<DuesDefinition | null>(null);
-  const [buildings, setBuildings] = useState<Building[]>([]);
   const [error, setError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [formPending, setFormPending] = useState(false);
@@ -57,26 +91,51 @@ export function DuesDetailPage() {
   const [bulkCancelOpen, setBulkCancelOpen] = useState(false);
   const [bulkCancelPending, setBulkCancelPending] = useState(false);
 
+  const [debts, setDebts] = useState<ApartmentDebt[]>([]);
+  const [debtsLoading, setDebtsLoading] = useState(false);
+  const [debtSearch, setDebtSearch] = useState("");
+  const debouncedDebtSearch = useDebouncedValue(debtSearch, 300);
+  const [debtStatus, setDebtStatus] = useState<"hepsi" | DebtStatus>("hepsi");
+
   const load = useCallback(async () => {
-    if (!auth || !params.id) return;
+    if (!auth || !duesId) return;
     setError("");
     try {
-      const [result, buildingList] = await Promise.all([
-        getDuesDefinition(auth, params.id),
-        listBuildings(auth, { status: "aktif", perPage: 100 }),
-      ]);
+      const result = await getDuesDefinition(auth, duesId);
       setDues(result.dues);
-      setBuildings(buildingList.items);
     } catch (err) {
       setDues(null);
       setError(err instanceof ApiError ? err.message : "Aidat yüklenemedi.");
     }
-  }, [auth, params.id]);
+  }, [auth, duesId]);
+
+  const loadDebts = useCallback(async () => {
+    if (!auth || !duesId) return;
+    setDebtsLoading(true);
+    try {
+      const result = await listApartmentDebts(auth, {
+        duesDefinitionId: duesId,
+        search: debouncedDebtSearch.trim() || undefined,
+        status: debtStatus === "hepsi" ? undefined : debtStatus,
+        perPage: 100,
+      });
+      setDebts(result.items);
+    } catch {
+      setDebts([]);
+    } finally {
+      setDebtsLoading(false);
+    }
+  }, [auth, duesId, debouncedDebtSearch, debtStatus]);
 
   useEffect(() => {
     if (!ready) return;
     void load();
   }, [ready, load]);
+
+  useEffect(() => {
+    if (!ready || !dues) return;
+    void loadDebts();
+  }, [ready, dues, loadDebts]);
 
   async function handleSubmit(values: DuesFormValues) {
     if (!auth || !dues || formPending) return;
@@ -86,7 +145,7 @@ export function DuesDetailPage() {
       const result = await updateDuesDefinition(auth, dues.id, duesFormToPayload(values));
       setDues(result.dues);
       setFormOpen(false);
-      showToast("Aidat güncellendi.");
+      showToast("Aidat tanımı güncellendi.");
       await load();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Kayıt kaydedilemedi.");
@@ -110,9 +169,10 @@ export function DuesDetailPage() {
     setChargePending(true);
     try {
       const result = await chargeDues(auth, chargePreview.dues.id);
-      showToast(`${result.createdCount} daire borçlandırıldı.`);
+      const period = formatPeriodLong(result.dues.periodYear, result.dues.periodMonth);
+      showToast(`${period} için ${result.createdCount} daire borçlandırıldı.`);
       setChargePreview(null);
-      await load();
+      await Promise.all([load(), loadDebts()]);
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Borçlandırma başarısız.", "error");
     } finally {
@@ -127,7 +187,7 @@ export function DuesDetailPage() {
       const result = await cancelOpenDuesDebts(auth, dues.id);
       showToast(`${result.cancelledCount} açık borç iptal edildi.`);
       setBulkCancelOpen(false);
-      await load();
+      await Promise.all([load(), loadDebts()]);
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Toplu iptal başarısız.", "error");
     } finally {
@@ -135,137 +195,247 @@ export function DuesDetailPage() {
     }
   }
 
-  const charged = dues?.chargedApartmentCount ?? 0;
-  const active = dues?.activeApartmentCount ?? 0;
+  if (error) {
+    return (
+      <PageContainer>
+        <p className="text-sm text-danger">{error}</p>
+        <Link href="/app/muhasebe/aidatlar" className="mt-4 inline-flex text-sm text-muted hover:text-ink">
+          ← Aidatlar
+        </Link>
+      </PageContainer>
+    );
+  }
+
+  if (!dues) {
+    return (
+      <PageContainer>
+        <p className="text-sm text-muted">Yükleniyor…</p>
+      </PageContainer>
+    );
+  }
+
+  const status = deriveDuesAssessmentStatus(dues);
+  const charged = dues.chargedApartmentCount ?? 0;
+  const original = Number(dues.totalOriginalAmount ?? 0);
+  const remaining = Number(dues.totalRemainingAmount ?? 0);
+  const collected = Math.max(0, original - remaining);
 
   return (
     <PageContainer>
-      <Link
-        href="/app/muhasebe/aidatlar"
-        className="mb-3 inline-flex items-center gap-1 text-sm text-muted hover:text-ink"
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Aidatlar
-      </Link>
-
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
-
-      {dues ? (
-        <>
-          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h1 className="text-[24px] font-semibold leading-none text-ink">{dues.name}</h1>
-            <div className="flex flex-wrap gap-2">
-              {(dues.chargedOpenCount ?? 0) > 0 ? (
-                <Button variant="secondary" onClick={() => setBulkCancelOpen(true)}>
-                  Açık Borçları Toplu İptal Et
-                </Button>
-              ) : null}
-              <Button variant="secondary" onClick={() => void openCharge()}>
+      <DetailHeader
+        backHref="/app/muhasebe/aidatlar"
+        backLabel="Aidatlar"
+        title={dues.name}
+        description={`${dues.building.name} · ${formatPeriodLong(dues.periodYear, dues.periodMonth)}`}
+        status={<Badge tone={statusTone(status)}>{DUES_ASSESSMENT_STATUS_LABELS[status]}</Badge>}
+        actions={
+          <>
+            {(dues.chargedOpenCount ?? 0) > 0 && dues.canSafeCancel !== false ? (
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setBulkCancelOpen(true)}>
+                Açık Borçları İptal Et
+              </Button>
+            ) : null}
+            {dues.canChargeMore !== false ? (
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={() => void openCharge()}>
                 Dairelere Borçlandır
               </Button>
-              <Button onClick={() => setFormOpen(true)}>Düzenle</Button>
-            </div>
-          </div>
+            ) : (
+              <Button variant="secondary" className="w-full sm:w-auto" disabled>
+                Zaten borçlandırıldı
+              </Button>
+            )}
+            <Button className="w-full sm:w-auto" onClick={() => setFormOpen(true)}>
+              Düzenle
+            </Button>
+          </>
+        }
+      />
 
-          <dl className="mb-6 grid grid-cols-2 gap-x-8 gap-y-3 border-b border-line pb-5 md:grid-cols-4">
-            <InfoItem label="Bina" value={dues.building.name} />
-            <InfoItem label="Dönem" value={formatPeriodLong(dues.periodYear, dues.periodMonth)} />
-            <InfoItem label="Tutar" value={formatMoney(dues.amount)} />
-            <InfoItem label="Son ödeme tarihi" value={formatDateTr(dues.dueDate)} />
-            <div>
-              <dt className="text-xs text-muted">Durum</dt>
-              <dd className="mt-0.5">
-                <StatusBadge active={dues.isActive} />
-              </dd>
-            </div>
-            <div className="col-span-2 md:col-span-3">
-              <InfoItem label="Açıklama" value={dues.description || "—"} />
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={DoorOpen} label="Borçlandırılan daire" value={String(charged)} />
+        <StatCard icon={Receipt} label="Toplam tahakkuk" value={formatMoney(dues.totalOriginalAmount ?? "0")} />
+        <StatCard icon={Wallet} label="Tahsil edilen" value={formatMoney(collected)} />
+        <StatCard icon={CircleDollarSign} label="Kalan" value={formatMoney(dues.totalRemainingAmount ?? "0")} />
+      </div>
+
+      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <SectionCard className="lg:col-span-2" title="Aidat Tanımı">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Info label="Aidat açıklaması" value={dues.name} />
+            <Info label="Dönem" value={formatPeriodLong(dues.periodYear, dues.periodMonth)} />
+            <Info label="Kapsam" value={dues.building.name} />
+            <Info label="Daire başına tutar" value={formatMoney(dues.amount)} />
+            <Info label="Son ödeme tarihi" value={formatDateTr(dues.dueDate)} />
+            <Info label="Durum" value={DUES_ASSESSMENT_STATUS_LABELS[status]} />
+            <div className="sm:col-span-2">
+              <Info label="Açıklama" value={dues.description || "—"} />
             </div>
           </dl>
-
-          <div>
-            <h2 className="mb-2 text-sm font-semibold text-ink">Borçlandırma Durumu</h2>
-            <p className="text-sm text-ink">
-              {charged} / {active} daire borçlandırıldı
+          {charged === 0 ? (
+            <p className="mt-4 rounded-md border border-accent/25 bg-accent-subtle px-3 py-2 text-sm text-ink">
+              Bu kayıt henüz bir aidat tanımıdır. Daire borçları “Dairelere Borçlandır” ile
+              oluşturulur; borçlar daireye bağlıdır, kişiye değil.
             </p>
-            <p className="mt-1 text-sm text-muted">
-              Toplam: {formatMoney(dues.totalOriginalAmount ?? "0")}
+          ) : null}
+        </SectionCard>
+
+        <SectionCard title="Hızlı Bilgi" description="Borçlandırma kapsamı">
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-center gap-2 rounded-md border border-line bg-canvas px-3 py-2">
+              <Building2 className="size-4 text-accent" aria-hidden />
+              <span>{dues.building.name}</span>
+            </li>
+            <li className="rounded-md border border-line bg-canvas px-3 py-2">
+              Aktif daire kapasitesi: {dues.activeApartmentCount ?? "—"}
+            </li>
+            <li className="rounded-md border border-line bg-canvas px-3 py-2">
+              Açık borç: {dues.chargedOpenCount ?? 0}
+            </li>
+          </ul>
+        </SectionCard>
+      </div>
+
+      <SurfaceCard padding="none" className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-section text-ink">Oluşturulan daire borçları</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Borçlar daireye bağlıdır. Malik/kiracı bilgisi yalnızca görüntüleme amaçlıdır.
             </p>
           </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="w-full sm:w-48">
+              <SearchInput
+                placeholder="Daire ara..."
+                value={debtSearch}
+                onChange={(event) => setDebtSearch(event.target.value)}
+                aria-label="Borç ara"
+              />
+            </div>
+            <Select
+              className="h-10 w-full sm:w-40"
+              value={debtStatus}
+              onChange={(event) => setDebtStatus(event.target.value as "hepsi" | DebtStatus)}
+              aria-label="Borç durumu"
+            >
+              <option value="hepsi">Tüm durumlar</option>
+              <option value="OPEN">Açık</option>
+              <option value="PAID">Ödendi</option>
+              <option value="CANCELLED">İptal</option>
+            </Select>
+          </div>
+        </div>
 
-          <DuesFormModal
-            open={formOpen}
-            title="Aidatı Düzenle"
-            initialValues={duesToForm(dues, auth?.siteId ?? "")}
-            pending={formPending}
-            error={formError}
-            onClose={() => (formPending ? undefined : setFormOpen(false))}
-            onSubmit={handleSubmit}
-          />
-
-          <Modal
-            open={Boolean(chargePreview)}
-            title="Aidatı dairelere uygula"
-            description="Bu işlem aktif dairelerin her biri için ayrı bir borç kaydı oluşturacaktır."
-            variant="confirm"
-            onClose={chargePending ? () => undefined : () => setChargePreview(null)}
-            footer={
-              <>
-                <Button variant="ghost" onClick={() => setChargePreview(null)} disabled={chargePending}>
-                  Vazgeç
+        <div className="p-4 sm:p-5">
+          {!debtsLoading && debts.length === 0 ? (
+            <EmptyState
+              icon={Receipt}
+              title="Henüz daire borcu yok"
+              description="Aidat tanımı oluşturulmuş olabilir; borçlandırma yapılmadıysa burada kayıt görünmez."
+              action={
+                <Button type="button" onClick={() => void openCharge()}>
+                  Dairelere Borçlandır
                 </Button>
-                <Button
-                  onClick={() => void handleCharge()}
-                  disabled={chargePending || !chargePreview?.pendingChargeCount}
-                >
-                  {chargePending
-                    ? "Borçlandırılıyor..."
-                    : `${chargePreview?.pendingChargeCount ?? 0} Daireyi Borçlandır`}
-                </Button>
-              </>
-            }
-          >
-            {chargePreview ? (
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted">Bina</dt>
-                  <dd className="font-medium">{chargePreview.dues.building.name}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted">Dönem</dt>
-                  <dd className="font-medium">
-                    {formatPeriodLong(chargePreview.dues.periodYear, chargePreview.dues.periodMonth)}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted">Tutar</dt>
-                  <dd className="font-medium">{formatMoney(chargePreview.dues.amount)}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted">Aktif daire</dt>
-                  <dd className="font-medium">{chargePreview.activeApartmentCount}</dd>
-                </div>
-                <div className="flex justify-between gap-4 border-t border-line pt-2">
-                  <dt className="text-muted">Toplam oluşturulacak borç</dt>
-                  <dd className="font-semibold">{formatMoney(chargePreview.totalChargeAmount)}</dd>
-                </div>
-              </dl>
-            ) : null}
-          </Modal>
+              }
+            />
+          ) : (
+            <Table>
+              <TableElement>
+                <THead>
+                  <TR className="hover:bg-transparent">
+                    <TH>Daire</TH>
+                    <TH>Malik / Kiracı</TH>
+                    <TH className="text-right">Borç</TH>
+                    <TH className="text-right">Ödenen</TH>
+                    <TH className="text-right">Kalan</TH>
+                    <TH>Durum</TH>
+                    <TH>Son ödeme</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {debtsLoading
+                    ? Array.from({ length: 4 }).map((_, index) => (
+                        <TR key={`d-${index}`} className="hover:bg-transparent">
+                          <TD colSpan={7}>
+                            <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+                          </TD>
+                        </TR>
+                      ))
+                    : null}
+                  {!debtsLoading
+                    ? debts.map((debt) => {
+                        const paid =
+                          Number(debt.originalAmount) - Number(debt.remainingAmount);
+                        return (
+                          <TR key={debt.id}>
+                            <TD className="font-medium">
+                              <Link
+                                href={`/app/muhasebe/borclar/${debt.id}`}
+                                className="hover:text-accent"
+                              >
+                                Daire {debt.apartment.number}
+                              </Link>
+                            </TD>
+                            <TD>
+                              <p className="text-sm">{debt.primaryOwnerName || "—"}</p>
+                              {debt.primaryTenantName ? (
+                                <p className="text-xs text-muted">Kiracı: {debt.primaryTenantName}</p>
+                              ) : null}
+                            </TD>
+                            <TD className="text-right">{formatMoney(debt.originalAmount)}</TD>
+                            <TD className="text-right">{formatMoney(Math.max(0, paid))}</TD>
+                            <TD className="text-right">{formatMoney(debt.remainingAmount)}</TD>
+                            <TD>{DEBT_STATUS_LABELS[debt.status]}</TD>
+                            <TD>{formatDateTr(debt.dueDate)}</TD>
+                          </TR>
+                        );
+                      })
+                    : null}
+                </TBody>
+              </TableElement>
+            </Table>
+          )}
+        </div>
+      </SurfaceCard>
 
-          <ConfirmDialog
-            open={bulkCancelOpen}
-            title="Açık borçlar iptal edilsin mi?"
-            description="Bu aidattan oluşmuş tüm açık borçlar iptal edilecektir. Finansal geçmiş korunur."
-            confirmLabel="Açık Borçları İptal Et"
-            cancelLabel="Vazgeç"
-            danger
-            pending={bulkCancelPending}
-            onConfirm={() => void handleBulkCancel()}
-            onClose={() => (bulkCancelPending ? undefined : setBulkCancelOpen(false))}
-          />
-        </>
-      ) : null}
+      <DuesFormModal
+        open={formOpen}
+        title="Aidatı Düzenle"
+        initialValues={duesToForm(dues, auth?.siteId ?? "")}
+        pending={formPending}
+        error={formError}
+        financialFieldsLocked={Boolean(dues.financialFieldsLocked)}
+        onClose={() => (formPending ? undefined : setFormOpen(false))}
+        onSubmit={handleSubmit}
+      />
+
+      <DuesChargeModal
+        preview={chargePreview}
+        pending={chargePending}
+        onClose={() => setChargePreview(null)}
+        onConfirm={() => void handleCharge()}
+      />
+
+      <ConfirmDialog
+        open={bulkCancelOpen}
+        title="Açık borçlar iptal edilsin mi?"
+        description="Bu aidattan oluşmuş tüm açık borçlar iptal edilecektir. Tahsil edilmiş ödemeler korunur; finansal geçmiş bozulmaz."
+        confirmLabel="Açık Borçları İptal Et"
+        cancelLabel="Vazgeç"
+        danger
+        pending={bulkCancelPending}
+        onConfirm={() => void handleBulkCancel()}
+        onClose={() => (bulkCancelPending ? undefined : setBulkCancelOpen(false))}
+      />
     </PageContainer>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-0.5 break-words text-sm font-medium text-ink">{value}</dd>
+    </div>
   );
 }

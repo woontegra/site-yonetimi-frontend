@@ -30,6 +30,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      {...props}
       type={type}
       className={cn(
         "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md text-center font-medium leading-none transition-colors duration-micro disabled:cursor-not-allowed disabled:opacity-50",
@@ -37,7 +38,6 @@ export function Button({
         sizes[size],
         className,
       )}
-      {...props}
     />
   );
 }

@@ -1,23 +1,37 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4100";
+import {
+  isAuthRefreshPath,
+  redirectToLoginForExpiredSession,
+  refreshAccessTokenSingleFlight,
+} from "@/lib/auth-refresh";
+import { API_URL, ApiError } from "@/lib/http-core";
+import { getAccessToken } from "@/lib/session";
 
-export class ApiError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
+export { API_URL, ApiError };
 
 type ApiRequestOptions = RequestInit & {
   token?: string | null;
   tenantId?: string | null;
   siteId?: string | null;
+  /** Tek seferlik retry sonrası tekrar refresh deneme. */
+  _retried?: boolean;
+  /** Auth endpoint'lerinde refresh kapalı. */
+  skipAuthRefresh?: boolean;
 };
 
+async function parsePayload(
+  response: Response,
+): Promise<{ message?: string; code?: string; details?: unknown }> {
+  if (response.status === 204) return {};
+  try {
+    return (await response.json()) as { message?: string; code?: string; details?: unknown };
+  } catch {
+    return {};
+  }
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { token, tenantId, siteId, headers, ...rest } = options;
+  const { token, tenantId, siteId, headers, _retried, skipAuthRefresh, ...rest } = options;
+  const accessToken = token ?? getAccessToken();
 
   let response: Response;
   try {
@@ -25,7 +39,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       ...rest,
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(tenantId ? { "X-Tenant-Id": tenantId } : {}),
         ...(siteId ? { "X-Site-Id": siteId } : {}),
         ...headers,
@@ -39,18 +53,37 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     return undefined as T;
   }
 
-  let payload: { message?: string } = {};
-  try {
-    payload = (await response.json()) as { message?: string };
-  } catch {
-    payload = {};
+  const payload = await parsePayload(response);
+
+  if (response.status === 401 && !_retried && !skipAuthRefresh && !isAuthRefreshPath(path)) {
+    const refreshed = await refreshAccessTokenSingleFlight();
+    if (refreshed.ok) {
+      return apiRequest<T>(path, {
+        ...options,
+        token: refreshed.token,
+        _retried: true,
+      });
+    }
+    if (refreshed.reason === "invalid" || refreshed.reason === "missing") {
+      redirectToLoginForExpiredSession();
+    }
+    // network/server: oturumu silme
+    throw new ApiError(
+      refreshed.reason === "network" || refreshed.reason === "server" ? 0 : 401,
+      refreshed.reason === "network" || refreshed.reason === "server"
+        ? "Sunucuya bağlanılamadı. Lütfen tekrar deneyin."
+        : (payload.message ?? "Oturumunuz sona erdi. Lütfen yeniden giriş yapın."),
+    );
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, payload.message ?? "İşlem tamamlanamadı.");
+    throw new ApiError(
+      response.status,
+      payload.message ?? "İşlem tamamlanamadı.",
+      payload.code,
+      payload.details,
+    );
   }
 
   return payload as T;
 }
-
-export { API_URL };

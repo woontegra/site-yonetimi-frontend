@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Link2 } from "lucide-react";
+import { ApartmentCombobox } from "@/components/apartments/ApartmentCombobox";
 import { SiteContextField } from "@/components/sites/SiteContextField";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
@@ -299,25 +300,18 @@ export function BankMatchModal({
               required
               error={errors.apartmentId}
             >
-              <Select
+              <ApartmentCombobox
                 id="bm-apartment"
+                apartments={apartments}
                 value={apartmentId}
                 disabled={!buildingId}
                 invalid={Boolean(errors.apartmentId)}
-                onChange={(event) => {
-                  const next = event.target.value;
+                onChange={(next) => {
                   setApartmentId(next);
                   setPersonId("");
                   onApartmentChange(next);
                 }}
-              >
-                <option value="">Daire seçin</option>
-                {apartments.map((apartment) => (
-                  <option key={apartment.id} value={apartment.id}>
-                    {apartment.number}
-                  </option>
-                ))}
-              </Select>
+              />
             </FormField>
             <FormField label="Kişi" htmlFor="bm-person" className="md:col-span-2">
               <Select

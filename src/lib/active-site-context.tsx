@@ -141,7 +141,7 @@ function nextPathForSiteChange(pathname: string, newSiteId: string): string | nu
 }
 
 export function ActiveSiteProvider({ children }: { children: ReactNode }) {
-  const { ready: authReady, token, tenantId } = useAuth();
+  const { ready: authReady, status: authStatus, token, tenantId } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
@@ -156,12 +156,11 @@ export function ActiveSiteProvider({ children }: { children: ReactNode }) {
   siteIdRef.current = siteId;
 
   const refreshSites = useCallback(async (options?: { preferSiteId?: string | null }) => {
-    if (!token || !tenantId) {
+    if (authStatus !== "authenticated" || !token || !tenantId) {
       setSites([]);
       setSiteIdState(null);
-      persistSiteId(null, null);
       setBootstrapError(null);
-      setStatus("noSites");
+      setStatus("loading");
       return;
     }
 
@@ -179,24 +178,28 @@ export function ActiveSiteProvider({ children }: { children: ReactNode }) {
       persistSiteId(tenantId, nextId);
       setStatus(nextSites.length === 0 ? "noSites" : "ready");
     } catch (error) {
-      // Fetch hatasını "site yok" sanma — onboarding'e düşürme.
       const message =
         error instanceof Error ? error.message : "Aktif siteler yüklenemedi.";
+      // Auth yönlendirmesi zaten http katmanında; burada yalnızca geçici ağ hatalarını göster.
+      if (/sona erdi|geçersiz|süresi dolmuş/i.test(message)) {
+        setBootstrapError(null);
+        setStatus((prev) => (prev === "ready" || prev === "noSites" ? prev : "loading"));
+        return;
+      }
       setBootstrapError(message);
-      // Önceki başarılı bootstrap varsa onu koru; yoksa loading'de kal (gate loading/error gösterir).
       setStatus((prev) => (prev === "ready" || prev === "noSites" ? prev : "loading"));
     }
-  }, [token, tenantId]);
+  }, [authStatus, token, tenantId]);
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || authStatus !== "authenticated") return;
     setStatus("loading");
     setSites([]);
     setSiteIdState(null);
     setBootstrapError(null);
     const match = normalizeAppPath(pathnameRef.current).match(/^\/app\/siteler\/([^/]+)$/);
     void refreshSites({ preferSiteId: match?.[1] ?? null });
-  }, [authReady, refreshSites]);
+  }, [authReady, authStatus, refreshSites]);
 
   const setSiteId = useCallback(
     (id: string, options?: { syncRoute?: boolean }) => {

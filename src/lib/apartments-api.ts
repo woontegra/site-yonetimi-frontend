@@ -1,5 +1,27 @@
 import { apiRequest } from "@/lib/http";
 
+export type ApartmentPersonSummary = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+};
+
+export type ApartmentDuesExemptionSummary = {
+  id: string;
+  apartmentId: string;
+  exemptionType: "FULL" | "PERCENT" | "FIXED";
+  value: string | null;
+  startDate: string;
+  endDate: string | null;
+  reason: "MANAGER" | "STAFF" | "BOARD_DECISION" | "OTHER";
+  reasonLabel: string;
+  note: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  revokedAt?: string | null;
+};
+
 export type Apartment = {
   id: string;
   number: string;
@@ -15,6 +37,49 @@ export type Apartment = {
     id: string;
     name: string;
   };
+  owners?: ApartmentPersonSummary[];
+  tenants?: ApartmentPersonSummary[];
+  ownerLabel?: string;
+  residentLabel?: string;
+  occupantLine?: string;
+  displayPerson?: {
+    id: string;
+    fullName: string;
+    role: "OWNER" | "TENANT" | null;
+    roleLabel: string | null;
+  } | null;
+  occupancy?: "OWNER_OCCUPIED" | "TENANT_OCCUPIED" | "VACANT";
+  occupancyLabel?: string;
+  primaryPhone?: string | null;
+  duesStatus?: {
+    code: "NORMAL" | "EXEMPT" | "DISCOUNTED" | "EXPIRING_SOON";
+    label: string;
+    exemption: ApartmentDuesExemptionSummary | null;
+  };
+  debtStatus?: {
+    code: "NONE" | "OPEN" | "OVERDUE";
+    label: string;
+    openAmount: string;
+    overdueAmount?: string;
+    isOverdue: boolean;
+  };
+  relationHistory?: Array<{
+    id: string;
+    relationType: "OWNER" | "TENANT";
+    isPrimary: boolean;
+    isActive: boolean;
+    startDate: string | null;
+    endDate: string | null;
+    note: string | null;
+    person: {
+      id: string;
+      fullName: string;
+      phone: string | null;
+      email: string | null;
+      isActive: boolean;
+      deleted: boolean;
+    };
+  }>;
 };
 
 export type ApartmentListResponse = {

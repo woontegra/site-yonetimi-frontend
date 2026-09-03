@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { MoreHorizontal, Plus } from "lucide-react";
 import {
   ApartmentFormModal,
@@ -10,6 +10,7 @@ import {
   apartmentToForm,
   type ApartmentFormValues,
 } from "@/components/apartments/ApartmentFormModal";
+import { DuesExemptionModal } from "@/components/apartments/DuesExemptionModal";
 import { EndRelationDialog } from "@/components/persons/EndRelationDialog";
 import {
   PersonFormModal,
@@ -34,6 +35,7 @@ import {
 import { ResidentQuickModal } from "@/components/setup/ResidentQuickModal";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { DetailHeader, DetailTabs } from "@/components/layout/DetailHeader";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -43,6 +45,10 @@ import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
 import { ApiError } from "@/lib/http";
 import { getApartment, updateApartment, type Apartment } from "@/lib/apartments-api";
+import {
+  EXEMPTION_REASON_LABELS,
+  EXEMPTION_TYPE_LABELS,
+} from "@/lib/apartment-dues-exemptions-api";
 import {
   ASSET_STATUS_LABELS,
   createAsset,
@@ -62,6 +68,7 @@ import {
 import { RELATION_TYPE_LABELS, formatPersonDate } from "@/lib/person-constants";
 import { createPerson, listPersons, type PersonListItem } from "@/lib/persons-api";
 import { createPayment, type PaymentPayload } from "@/lib/payments-api";
+import { hasPermission } from "@/lib/permissions";
 import {
   createRelation,
   endRelation,
@@ -82,7 +89,6 @@ import {
   visitorFormToCreatePayload,
   type VisitorFormValues,
 } from "@/components/visitors/VisitorFormModal";
-import { Badge } from "@/components/ui/Badge";
 import {
   VISIT_STATUS_LABELS,
   createVisit,
@@ -211,7 +217,8 @@ function RelationGroup({
 
 export function ApartmentDetailPage() {
   const params = useParams<{ id: string }>();
-  const { ready } = useAuth();
+  const searchParams = useSearchParams();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth();
   const { site, siteId } = useActiveSite();
@@ -219,7 +226,12 @@ export function ApartmentDetailPage() {
   const [apartment, setApartment] = useState<Apartment | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<TabId>("genel");
+  const initialTab = tabs.some((item) => item.id === searchParams.get("tab"))
+    ? (searchParams.get("tab") as TabId)
+    : "genel";
+  const [tab, setTab] = useState<TabId>(initialTab);
+  const [exemptionOpen, setExemptionOpen] = useState(false);
+  const canManageDues = hasPermission(user, "dues.manage") || !(user?.permissions?.length);
   const [formOpen, setFormOpen] = useState(false);
   const [formPending, setFormPending] = useState(false);
   const [formError, setFormError] = useState("");
@@ -660,9 +672,169 @@ export function ApartmentDetailPage() {
           <DetailTabs tabs={tabs} value={tab} onChange={setTab} />
 
           {tab === "genel" ? (
-            <p className="text-sm text-muted">
-              {apartment.description || "Bu daire için henüz açıklama girilmedi."}
-            </p>
+            <div className="space-y-4">
+              <section className="rounded-lg border border-line bg-surface p-4">
+                <h2 className="text-sm font-semibold text-ink">Daire bilgileri</h2>
+                <p className="mt-2 text-sm text-muted">
+                  {apartment.description || "Bu daire için henüz açıklama girilmedi."}
+                </p>
+                <dl className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <InfoItem label="Kullanım" value={apartment.occupancyLabel ?? "—"} />
+                  <InfoItem label="Aidat durumu" value={apartment.duesStatus?.label ?? "Normal"} />
+                  <InfoItem label="Borç durumu" value={apartment.debtStatus?.label ?? "Borcu yok"} />
+                  <InfoItem label="İletişim" value={apartment.primaryPhone || "—"} />
+                </dl>
+              </section>
+
+              <section className="rounded-lg border border-line bg-surface p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-ink">Malikler</h2>
+                  <Button size="sm" variant="secondary" onClick={() => setTab("kisiler")}>
+                    Yönet
+                  </Button>
+                </div>
+                {(apartment.owners?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted">Malik atanmamış.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {apartment.owners!.map((owner) => (
+                      <li
+                        key={owner.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2"
+                      >
+                        <div>
+                          <Link href={`/app/kisiler/${owner.id}`} className="font-medium hover:text-brand">
+                            {owner.fullName}
+                          </Link>
+                          <p className="text-xs text-muted">{owner.phone || "—"}</p>
+                        </div>
+                        <Badge tone="success">Malik</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="rounded-lg border border-line bg-surface p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-ink">Kiracılar / oturanlar</h2>
+                  <Button size="sm" variant="secondary" onClick={() => setTab("kisiler")}>
+                    Yönet
+                  </Button>
+                </div>
+                {(apartment.tenants?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted">
+                    {apartment.occupancy === "OWNER_OCCUPIED"
+                      ? "Aktif kiracı yok · Malik oturuyor"
+                      : "Aktif kiracı yok · Daire boş"}
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {apartment.tenants!.map((tenant) => (
+                      <li
+                        key={tenant.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2"
+                      >
+                        <div>
+                          <Link href={`/app/kisiler/${tenant.id}`} className="font-medium hover:text-brand">
+                            {tenant.fullName}
+                          </Link>
+                          <p className="text-xs text-muted">{tenant.phone || "—"}</p>
+                        </div>
+                        <Badge tone="info">Kiracı</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="rounded-lg border border-line bg-surface p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-ink">Aktif aidat muafiyeti</h2>
+                  {canManageDues ? (
+                    <Button size="sm" variant="secondary" onClick={() => setExemptionOpen(true)}>
+                      {apartment.duesStatus?.exemption ? "Düzenle" : "Tanımla"}
+                    </Button>
+                  ) : null}
+                </div>
+                {apartment.duesStatus?.exemption ? (
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
+                    <InfoItem
+                      label="Tür"
+                      value={
+                        EXEMPTION_TYPE_LABELS[apartment.duesStatus.exemption.exemptionType] ??
+                        apartment.duesStatus.exemption.exemptionType
+                      }
+                    />
+                    <InfoItem
+                      label="Sebep"
+                      value={
+                        apartment.duesStatus.exemption.reasonLabel ||
+                        EXEMPTION_REASON_LABELS[apartment.duesStatus.exemption.reason]
+                      }
+                    />
+                    <InfoItem
+                      label="Başlangıç"
+                      value={formatDateTr(apartment.duesStatus.exemption.startDate)}
+                    />
+                    <InfoItem
+                      label="Bitiş"
+                      value={
+                        apartment.duesStatus.exemption.endDate
+                          ? formatDateTr(apartment.duesStatus.exemption.endDate)
+                          : "Süresiz"
+                      }
+                    />
+                  </dl>
+                ) : (
+                  <p className="text-sm text-muted">Aktif muafiyet yok.</p>
+                )}
+              </section>
+
+              <section className="rounded-lg border border-line bg-surface p-4">
+                <h2 className="mb-3 text-sm font-semibold text-ink">Açık borç özeti</h2>
+                <p className="text-sm text-ink">
+                  {apartment.debtStatus?.code === "NONE"
+                    ? "Borcu yok"
+                    : `${formatMoney(apartment.debtStatus?.openAmount ?? "0")} açık borç`}
+                  {apartment.debtStatus?.isOverdue ? " · Vadesi geçmiş" : ""}
+                </p>
+              </section>
+
+              <section className="rounded-lg border border-line bg-surface p-4">
+                <h2 className="mb-3 text-sm font-semibold text-ink">İlişki geçmişi</h2>
+                {(apartment.relationHistory?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted">İlişki kaydı yok.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {apartment.relationHistory!.map((rel) => (
+                      <li
+                        key={rel.id}
+                        className="rounded-md border border-line px-3 py-2 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Link
+                            href={`/app/kisiler/${rel.person.id}`}
+                            className="font-medium hover:text-brand"
+                          >
+                            {rel.person.fullName}
+                          </Link>
+                          <Badge tone={rel.isActive ? "success" : "neutral"}>
+                            {rel.isActive ? "Aktif" : "Pasif"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted">
+                          {RELATION_TYPE_LABELS[rel.relationType] ?? rel.relationType}
+                          {" · "}
+                          {formatPersonDate(rel.startDate)} – {formatPersonDate(rel.endDate)}
+                          {rel.person.phone ? ` · ${rel.person.phone}` : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
           ) : null}
 
           {tab === "kisiler" ? (
@@ -1062,6 +1234,19 @@ export function ApartmentDetailPage() {
             pending={endPending}
             onClose={() => (endPending ? undefined : setEnding(null))}
             onConfirm={(endDate) => void handleEndRelation(endDate)}
+          />
+
+          <DuesExemptionModal
+            open={exemptionOpen}
+            mode={apartment.duesStatus?.exemption ? "edit" : "create"}
+            apartment={apartment}
+            siteName={site?.name}
+            auth={auth}
+            onClose={() => setExemptionOpen(false)}
+            onSaved={() => {
+              showToast("Muafiyet kaydedildi.");
+              void load();
+            }}
           />
         </>
       ) : null}

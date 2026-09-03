@@ -32,6 +32,7 @@ export type BuildingPayload = {
   description?: string;
   apartmentCount?: number | null;
   floorCount?: number | null;
+  isActive?: boolean;
 };
 
 type SessionResponse = {

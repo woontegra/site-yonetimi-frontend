@@ -19,24 +19,26 @@ export function Pagination({ page, perPage, total, onPageChange }: PaginationPro
       <p className="text-caption text-muted">
         {start}–{end} / {total} kayıt
       </p>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
-        >
-          Önceki
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={page >= lastPage}
-          onClick={() => onPageChange(page + 1)}
-        >
-          Sonraki
-        </Button>
-      </div>
+      {lastPage > 1 ? (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+          >
+            Önceki
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page >= lastPage}
+            onClick={() => onPageChange(page + 1)}
+          >
+            Sonraki
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

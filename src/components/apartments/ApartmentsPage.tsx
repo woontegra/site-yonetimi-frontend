@@ -11,6 +11,7 @@ import {
   type ApartmentFormValues,
 } from "@/components/apartments/ApartmentFormModal";
 import { ApartmentsTable } from "@/components/apartments/ApartmentsTable";
+import { DuesExemptionModal } from "@/components/apartments/DuesExemptionModal";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { NeedSiteDialog } from "@/components/sites/NeedSiteDialog";
@@ -37,16 +38,20 @@ import {
   type Apartment,
 } from "@/lib/apartments-api";
 import { listBuildings, type Building } from "@/lib/buildings-api";
+import { hasPermission } from "@/lib/permissions";
 import { ROOM_TYPES } from "@/lib/room-types";
+import { useRouter } from "next/navigation";
 
 const PER_PAGE = 20;
 
 export function ApartmentsPage() {
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
+  const router = useRouter();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites, status: siteStatus } = useActiveSite();
   const { openWizard } = useSiteSetupWizard();
+  const canManageDues = hasPermission(user, "dues.manage") || !(user?.permissions?.length);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -72,6 +77,8 @@ export function ApartmentsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkBuildingId, setBulkBuildingId] = useState("");
+  const [exemptionApartment, setExemptionApartment] = useState<Apartment | null>(null);
+  const [exemptionMode, setExemptionMode] = useState<"create" | "edit">("create");
 
   const loadBuildings = useCallback(async () => {
     if (siteStatus !== "ready" || !auth || !siteId) {
@@ -194,6 +201,7 @@ export function ApartmentsPage() {
   }
 
   const filterCount = [floor, roomType, status].filter(Boolean).length;
+  const showBuildingColumn = buildings.length > 1 && !buildingId;
 
   return (
     <PageContainer>
@@ -292,13 +300,24 @@ export function ApartmentsPage() {
       <ApartmentsTable
         items={items}
         loading={loading}
+        showBuilding={showBuildingColumn}
         emptyLabel={
           buildings.length === 0
             ? "Önce bir bina oluşturun."
             : "Bu site için henüz daire oluşturulmamış."
         }
+        canManageDues={canManageDues}
         onEdit={openEdit}
         onDelete={setDeleting}
+        onManageResidents={(apartment) => router.push(`/app/daireler/${apartment.id}?tab=kisiler`)}
+        onDefineExemption={(apartment) => {
+          setExemptionMode("create");
+          setExemptionApartment(apartment);
+        }}
+        onEditExemption={(apartment) => {
+          setExemptionMode("edit");
+          setExemptionApartment(apartment);
+        }}
       />
       {!loading && !listError && buildings.length === 0 ? (
         <p className="mt-2 text-center text-sm">
@@ -372,6 +391,19 @@ export function ApartmentsPage() {
         onClose={() => setImportOpen(false)}
         onImported={() => {
           void loadBuildings();
+          void load();
+        }}
+      />
+
+      <DuesExemptionModal
+        open={Boolean(exemptionApartment)}
+        mode={exemptionMode}
+        apartment={exemptionApartment}
+        siteName={site?.name}
+        auth={auth}
+        onClose={() => setExemptionApartment(null)}
+        onSaved={() => {
+          showToast(exemptionMode === "edit" ? "Muafiyet güncellendi." : "Muafiyet tanımlandı.");
           void load();
         }}
       />

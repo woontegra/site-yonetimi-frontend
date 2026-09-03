@@ -60,7 +60,7 @@ export function useApartmentsForBuilding(
     setLoading(true);
     void listApartments(
       { ...auth, siteId },
-      { buildingId, page: 1, perPage: 200, status: "aktif" },
+      { buildingId, page: 1, perPage: 500, status: "aktif" },
     )
       .then((result) => {
         if (!cancelled) setApartments(result.items);
