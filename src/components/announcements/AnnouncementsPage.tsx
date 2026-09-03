@@ -26,15 +26,15 @@ import { useToast } from "@/components/ui/Toast";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
+import { canManageAnnouncements } from "@/lib/permissions";
 import {
   ANNOUNCEMENT_PRIORITY_LABELS,
   ANNOUNCEMENT_STATUS_LABELS,
   archiveAnnouncement,
-  cancelAnnouncement,
   createAnnouncement,
+  deleteAnnouncement,
   getAnnouncement,
   listAnnouncements,
-  publishAnnouncement,
   updateAnnouncement,
   type Announcement,
   type AnnouncementPriority,
@@ -80,10 +80,11 @@ function publishDate(item: Announcement) {
 
 export function AnnouncementsPage() {
   const router = useRouter();
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
+  const canDelete = canManageAnnouncements(user);
 
   const [tab, setTab] = useState<TabId>("PUBLISHED");
   const [search, setSearch] = useState("");
@@ -104,8 +105,8 @@ export function AnnouncementsPage() {
 
   const [archiving, setArchiving] = useState<Announcement | null>(null);
   const [archivePending, setArchivePending] = useState(false);
-  const [cancelling, setCancelling] = useState<Announcement | null>(null);
-  const [cancelPending, setCancelPending] = useState(false);
+  const [deleting, setDeleting] = useState<Announcement | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
 
   const load = useCallback(async () => {
     if (!auth) {
@@ -198,17 +199,6 @@ export function AnnouncementsPage() {
     }
   }
 
-  async function handlePublish(item: Announcement) {
-    if (!auth) return;
-    try {
-      await publishAnnouncement(auth, item.id);
-      showToast("Duyuru yayınlandı.");
-      await load();
-    } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Duyuru yayınlanamadı.", "error");
-    }
-  }
-
   async function handleArchive() {
     if (!auth || !archiving || archivePending) return;
     setArchivePending(true);
@@ -224,18 +214,18 @@ export function AnnouncementsPage() {
     }
   }
 
-  async function handleCancel() {
-    if (!auth || !cancelling || cancelPending) return;
-    setCancelPending(true);
+  async function handleDelete() {
+    if (!auth || !deleting || deletePending) return;
+    setDeletePending(true);
     try {
-      await cancelAnnouncement(auth, cancelling.id);
-      showToast("Duyuru iptal edildi.");
-      setCancelling(null);
+      await deleteAnnouncement(auth, deleting.id);
+      showToast("Duyuru silindi.");
+      setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Duyuru iptal edilemedi.", "error");
+      showToast(error instanceof ApiError ? error.message : "Duyuru silinemedi.", "error");
     } finally {
-      setCancelPending(false);
+      setDeletePending(false);
     }
   }
 
@@ -366,23 +356,16 @@ export function AnnouncementsPage() {
                           </button>
                         }
                       >
-                        <DropdownItem href={`/app/duyurular/${item.id}`}>Detay</DropdownItem>
+                        <DropdownItem href={`/app/duyurular/${item.id}`}>Görüntüle</DropdownItem>
                         {item.status === "DRAFT" || item.status === "PUBLISHED" ? (
                           <DropdownItem onClick={() => void openEdit(item)}>Düzenle</DropdownItem>
                         ) : null}
-                        {item.status === "DRAFT" ? (
-                          <DropdownItem onClick={() => void handlePublish(item)}>
-                            Yayınla
-                          </DropdownItem>
+                        {item.status !== "ARCHIVED" && item.status !== "CANCELLED" ? (
+                          <DropdownItem onClick={() => setArchiving(item)}>Arşivle</DropdownItem>
                         ) : null}
-                        {item.status === "PUBLISHED" ? (
-                          <DropdownItem danger onClick={() => setArchiving(item)}>
-                            Arşivle
-                          </DropdownItem>
-                        ) : null}
-                        {item.status === "DRAFT" || item.status === "PUBLISHED" ? (
-                          <DropdownItem danger onClick={() => setCancelling(item)}>
-                            İptal et
+                        {canDelete ? (
+                          <DropdownItem danger onClick={() => setDeleting(item)}>
+                            Sil
                           </DropdownItem>
                         ) : null}
                       </Dropdown>
@@ -425,15 +408,15 @@ export function AnnouncementsPage() {
       />
 
       <ConfirmDialog
-        open={Boolean(cancelling)}
-        title="Duyuru iptal edilsin mi?"
-        description="Duyuru iptal edilecek ve İptal sekmesine taşınacaktır. Bu işlem geri alınamaz."
-        confirmLabel="İptal et"
+        open={Boolean(deleting)}
+        title="Duyuruyu silmek istediğinize emin misiniz?"
+        description={deleting ? `"${deleting.title}" kalıcı olarak silinecektir.` : ""}
+        confirmLabel="Sil"
         cancelLabel="Vazgeç"
         danger
-        pending={cancelPending}
-        onConfirm={() => void handleCancel()}
-        onClose={() => (cancelPending ? undefined : setCancelling(null))}
+        pending={deletePending}
+        onConfirm={() => void handleDelete()}
+        onClose={() => (deletePending ? undefined : setDeleting(null))}
       />
     </PageContainer>
   );

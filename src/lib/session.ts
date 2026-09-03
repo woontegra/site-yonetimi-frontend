@@ -19,6 +19,24 @@ export type SessionState = {
 };
 
 const STORAGE_KEY = "sy_session";
+const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+
+function authCookieFlags(maxAge: number): string {
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  return `path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+}
+
+export function hasAuthCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split(";").some((part) => part.trim().startsWith(`${AUTH_COOKIE}=`));
+}
+
+/** Middleware /app erişimi için cookie'yi yazar. */
+export function ensureAuthCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${AUTH_COOKIE}=1; ${authCookieFlags(AUTH_COOKIE_MAX_AGE)}`;
+}
 
 export function readSession(): SessionState | null {
   if (typeof window === "undefined") return null;
@@ -33,12 +51,12 @@ export function readSession(): SessionState | null {
 
 export function writeSession(session: SessionState): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  document.cookie = `${AUTH_COOKIE}=1; path=/; SameSite=Lax`;
+  ensureAuthCookie();
 }
 
 export function clearSession(): void {
   window.localStorage.removeItem(STORAGE_KEY);
-  document.cookie = `${AUTH_COOKIE}=; path=/; Max-Age=0; SameSite=Lax`;
+  document.cookie = `${AUTH_COOKIE}=; ${authCookieFlags(0)}`;
 }
 
 export function nameFromEmail(email: string): string {

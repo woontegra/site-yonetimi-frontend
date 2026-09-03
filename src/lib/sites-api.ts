@@ -102,9 +102,30 @@ export function updateSite(auth: AuthContext, id: string, payload: SitePayload) 
   });
 }
 
-export function deleteSite(auth: AuthContext, id: string) {
-  return apiRequest<void>(`/api/sites/${id}`, {
+export function deleteSite(auth: AuthContext, id: string, confirmName: string) {
+  return apiRequest<{ message: string }>(`/api/sites/${id}`, {
     ...auth,
     method: "DELETE",
+    body: JSON.stringify({ confirmName }),
   });
+}
+
+export type SiteDeleteCounts = {
+  buildings: number;
+  apartments: number;
+  assets: number;
+  announcements: number;
+  relations: number;
+  debts: number;
+  payments: number;
+  expenses: number;
+  feedback: number;
+  other: number;
+};
+
+export function getSiteDeletePreview(auth: AuthContext, id: string) {
+  return apiRequest<{ site: { id: string; name: string }; counts: SiteDeleteCounts }>(
+    `/api/sites/${id}/delete-preview`,
+    auth,
+  );
 }

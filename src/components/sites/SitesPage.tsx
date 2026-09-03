@@ -15,6 +15,8 @@ import {
 import { SitesTable } from "@/components/sites/SitesTable";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/Toast";
@@ -26,10 +28,25 @@ import { ApiError } from "@/lib/http";
 import {
   createSite,
   deleteSite,
+  getSiteDeletePreview,
   listSites,
   updateSite,
   type Site,
+  type SiteDeleteCounts,
 } from "@/lib/sites-api";
+
+const EMPTY_COUNTS: SiteDeleteCounts = {
+  buildings: 0,
+  apartments: 0,
+  assets: 0,
+  announcements: 0,
+  relations: 0,
+  debts: 0,
+  payments: 0,
+  expenses: 0,
+  feedback: 0,
+  other: 0,
+};
 
 const PER_PAGE = 20;
 
@@ -58,6 +75,9 @@ export function SitesPage() {
   const [archivePending, setArchivePending] = useState(false);
   const [deleting, setDeleting] = useState<Site | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteCounts, setDeleteCounts] = useState<SiteDeleteCounts>(EMPTY_COUNTS);
+  const [deletePreviewError, setDeletePreviewError] = useState("");
 
   const load = useCallback(async () => {
     if (!ready) return;
@@ -182,14 +202,30 @@ export function SitesPage() {
     }
   }
 
+  async function openDelete(site: Site) {
+    if (!auth) return;
+    setDeleting(site);
+    setDeleteConfirmName("");
+    setDeleteCounts(EMPTY_COUNTS);
+    setDeletePreviewError("");
+    try {
+      const preview = await getSiteDeletePreview(auth, site.id);
+      setDeleteCounts(preview.counts);
+    } catch (error) {
+      setDeletePreviewError(error instanceof ApiError ? error.message : "Silme özeti yüklenemedi.");
+    }
+  }
+
   async function handleDelete() {
     if (!auth || !deleting || deletePending) return;
+    if (deleteConfirmName !== deleting.name) return;
     setDeletePending(true);
     try {
       const deletedId = deleting.id;
-      await deleteSite(auth, deletedId);
-      showToast("Site silindi.");
+      await deleteSite(auth, deletedId, deleteConfirmName);
+      showToast("Site ve ilişkili kayıtları kalıcı olarak silindi.");
       setDeleting(null);
+      setDeleteConfirmName("");
       await refreshSites({
         preferSiteId: siteId === deletedId ? undefined : siteId,
       });
@@ -227,10 +263,11 @@ export function SitesPage() {
         items={items}
         loading={loading}
         canOpenWizard={canOpenWizard}
+        canManage={canOpenWizard}
         onEdit={openEdit}
         onOpenWizard={openWizardForSite}
         onArchive={(site) => setArchiving(site)}
-        onDelete={(site) => setDeleting(site)}
+        onDelete={(site) => void openDelete(site)}
       />
 
       <Pagination page={page} perPage={PER_PAGE} total={total} onPageChange={setPage} />
@@ -259,16 +296,63 @@ export function SitesPage() {
         onClose={() => setArchiving(null)}
       />
 
-      <ConfirmDialog
+      <Modal
         open={Boolean(deleting)}
-        title="Bu siteyi silmek istediğinize emin misiniz?"
-        description={deleting ? deleting.name : ""}
-        confirmLabel="Sil"
-        danger
-        pending={deletePending}
-        onConfirm={() => void handleDelete()}
-        onClose={() => setDeleting(null)}
-      />
+        title="Siteyi kalıcı olarak sil"
+        description="Bu siteye bağlı binalar, daireler, demirbaşlar, duyurular, geri bildirimler, finansal kayıtlar ve diğer site verileri kalıcı olarak silinecektir. Bu işlem geri alınamaz."
+        iconTone="danger"
+        variant="confirm"
+        size="md"
+        onClose={() => (deletePending ? undefined : setDeleting(null))}
+        footer={
+          <>
+            <Button variant="secondary" disabled={deletePending} onClick={() => setDeleting(null)}>
+              Vazgeç
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deletePending || !deleting || deleteConfirmName !== deleting.name}
+              onClick={() => void handleDelete()}
+            >
+              {deletePending ? "Siliniyor..." : "Siteyi Sil"}
+            </Button>
+          </>
+        }
+      >
+        {deletePreviewError ? <p className="mb-3 text-sm text-danger">{deletePreviewError}</p> : null}
+        <dl className="grid grid-cols-2 gap-2 text-sm">
+          {(
+            [
+              ["Bina", deleteCounts.buildings],
+              ["Daire", deleteCounts.apartments],
+              ["Demirbaş", deleteCounts.assets],
+              ["Duyuru", deleteCounts.announcements],
+              ["Kişi/daire ilişkisi", deleteCounts.relations],
+              ["Borç", deleteCounts.debts],
+              ["Tahsilat", deleteCounts.payments],
+              ["Gider", deleteCounts.expenses],
+              ["Geri bildirim", deleteCounts.feedback],
+              ["Diğer ilgili kayıtlar", deleteCounts.other],
+            ] as const
+          ).map(([label, count]) => (
+            <div key={label} className="rounded-md border border-line bg-canvas px-3 py-2">
+              <dt className="text-xs text-muted">{label}</dt>
+              <dd className="font-medium text-ink">{count}</dd>
+            </div>
+          ))}
+        </dl>
+        <label className="mt-4 block text-sm text-ink">
+          Onay için site adını birebir yazın
+          <Input
+            className="mt-1"
+            value={deleteConfirmName}
+            onChange={(event) => setDeleteConfirmName(event.target.value)}
+            placeholder={deleting?.name ?? ""}
+            autoComplete="off"
+            data-modal-autofocus
+          />
+        </label>
+      </Modal>
     </PageContainer>
   );
 }

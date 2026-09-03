@@ -30,6 +30,7 @@ import { Table, TableElement, TBody, TD, TH, THead, TR } from "@/components/ui/T
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
+import { canManageAssets } from "@/lib/permissions";
 import {
   archiveAsset,
   ASSET_MOVEMENT_LABELS,
@@ -37,6 +38,7 @@ import {
   changeAssetLocation,
   changeAssetStatus,
   createAssetMaintenance,
+  deleteAsset,
   deleteAssetMaintenance,
   getAsset,
   listAssetCategories,
@@ -125,7 +127,7 @@ function movementNext(movement: AssetMovement): string {
 export function AssetDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth();
   const { site, siteId } = useActiveSite();
@@ -151,6 +153,8 @@ export function AssetDetailPage() {
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archivePending, setArchivePending] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
 
   const [disposeOpen, setDisposeOpen] = useState(false);
   const [disposePending, setDisposePending] = useState(false);
@@ -288,6 +292,21 @@ export function AssetDetailPage() {
     }
   }
 
+  async function handleHardDelete() {
+    if (!auth || !asset || deletePending) return;
+    setDeletePending(true);
+    try {
+      await deleteAsset(auth, asset.id);
+      showToast("Demirbaş silindi.");
+      setDeleteOpen(false);
+      router.push("/app/demirbaslar");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Demirbaş silinemedi.", "error");
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
   async function handleArchive() {
     if (!auth || !asset || archivePending) return;
     setArchivePending(true);
@@ -410,6 +429,11 @@ export function AssetDetailPage() {
                   <DropdownItem danger onClick={() => setArchiveOpen(true)}>
                     Arşivle
                   </DropdownItem>
+                  {canManageAssets(user) ? (
+                    <DropdownItem danger onClick={() => setDeleteOpen(true)}>
+                      Sil
+                    </DropdownItem>
+                  ) : null}
                 </Dropdown>
               </div>
             }
@@ -699,10 +723,21 @@ export function AssetDetailPage() {
             description="Demirbaş aktif listeden kaldırılacak ancak geçmiş hareketleri korunacaktır."
             confirmLabel="Arşivle"
             cancelLabel="Vazgeç"
-            danger
             pending={archivePending}
             onConfirm={() => void handleArchive()}
             onClose={() => (archivePending ? undefined : setArchiveOpen(false))}
+          />
+
+          <ConfirmDialog
+            open={deleteOpen}
+            title="Demirbaşı silmek istediğinize emin misiniz?"
+            description={asset ? `"${asset.name}" ve bağlı hareket/bakım kayıtları kalıcı olarak silinecektir.` : ""}
+            confirmLabel="Sil"
+            cancelLabel="Vazgeç"
+            danger
+            pending={deletePending}
+            onConfirm={() => void handleHardDelete()}
+            onClose={() => (deletePending ? undefined : setDeleteOpen(false))}
           />
         </>
       ) : null}

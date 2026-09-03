@@ -236,6 +236,14 @@ export function AdminTenantDetailPage() {
             <div className="flex flex-wrap gap-1.5 pt-1">
               <StatusBadge active={tenant.isActive} />
               {sub ? <Badge tone="brand">{PLAN_LABELS[sub.plan] ?? sub.plan}</Badge> : <Badge>Plan yok</Badge>}
+              {sub?.plan === "PROFESSIONAL" && sub.status === "ACTIVE" ? (
+                <Badge tone="success">Aktif lisans</Badge>
+              ) : sub ? (
+                <Badge tone={sub.status === "TRIAL" ? "info" : "neutral"}>{SUB_STATUS_LABELS[sub.status] ?? sub.status}</Badge>
+              ) : null}
+              {sub?.plan === "PROFESSIONAL" ? (
+                <Badge tone="neutral">Bitiş: {formatDateTr(sub.endsAt)}</Badge>
+              ) : null}
               {remaining ? <Badge tone={sub && sub.remainingDays <= 7 ? "warning" : "neutral"}>{remaining}</Badge> : null}
               {needsIntervention ? <Badge tone="danger">Müdahale Gerekli</Badge> : null}
             </div>
@@ -253,7 +261,13 @@ export function AdminTenantDetailPage() {
         <StatCard
           label="Abonelik"
           value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"}
-          hint={sub ? remaining ?? formatDateTr(sub.endsAt) : "Kayıt yok"}
+          hint={
+            sub
+              ? sub.plan === "PROFESSIONAL"
+                ? `Aktif lisans · Bitiş ${formatDateTr(sub.endsAt)}${remaining ? ` · ${remaining}` : ""}`
+                : `${SUB_STATUS_LABELS[sub.status] ?? sub.status}${remaining ? ` · ${remaining}` : ""}`
+              : "Kayıt yok"
+          }
           icon={CalendarDays}
         />
         <StatCard

@@ -94,7 +94,5 @@ export function subscriptionTone(status: string | undefined): BadgeTone {
 export function remainingLabel(sub: AdminSubscription | null | undefined): string | null {
   if (!sub) return null;
   if (sub.remainingDays < 0) return "Süresi doldu";
-  if (sub.remainingDays <= 7) return `${sub.remainingDays} gün kaldı`;
-  if (sub.remainingDays <= 30) return `${sub.remainingDays} gün kaldı`;
-  return null;
+  return `${sub.remainingDays} gün kaldı`;
 }

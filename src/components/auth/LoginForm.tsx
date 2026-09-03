@@ -7,7 +7,13 @@ import { AuthPasswordField } from "@/components/auth/AuthPasswordField";
 import { FormField } from "@/components/ui/FormField";
 import { mapLoginError } from "@/lib/auth-errors";
 import { apiLogin } from "@/lib/api";
-import { readSession, writeSession } from "@/lib/session";
+import {
+  clearSession,
+  ensureAuthCookie,
+  hasAuthCookie,
+  readSession,
+  writeSession,
+} from "@/lib/session";
 import { safeAppReturnPath } from "@/lib/safe-return-path";
 
 export function LoginForm() {
@@ -23,18 +29,29 @@ export function LoginForm() {
 
 function LoginFields() {
   const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next") ?? searchParams.get("from");
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
+    if (redirectedRef.current) return;
     const existing = readSession();
-    if (existing?.token && existing.user.id !== "preview") {
-      window.location.replace(safeAppReturnPath(searchParams.get("next") ?? searchParams.get("from")));
+    if (!existing?.token || existing.user.id === "preview") return;
+
+    // localStorage var, cookie yoksa middleware /app'i tekrar /giris'e atar → yanıp sönme döngüsü.
+    ensureAuthCookie();
+    if (!hasAuthCookie()) {
+      clearSession();
+      return;
     }
-  }, [searchParams]);
+
+    redirectedRef.current = true;
+    window.location.replace(safeAppReturnPath(nextPath));
+  }, [nextPath]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -60,7 +77,7 @@ function LoginFields() {
           siteIds: result.user.tenants?.[0]?.siteIds ?? null,
         },
       });
-      window.location.assign(safeAppReturnPath(searchParams.get("next") ?? searchParams.get("from")));
+      window.location.assign(safeAppReturnPath(nextPath));
     } catch (err) {
       setError(mapLoginError(err));
       setPending(false);

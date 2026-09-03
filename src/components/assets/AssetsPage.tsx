@@ -30,12 +30,14 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { NeedSiteDialog } from "@/components/sites/NeedSiteDialog";
 import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
+import { canManageAssets } from "@/lib/permissions";
 import {
   archiveAsset,
   ASSET_STATUS_LABELS,
   changeAssetLocation,
   changeAssetStatus,
   createAsset,
+  deleteAsset,
   getAsset,
   listAssetCategories,
   listAssets,
@@ -54,10 +56,11 @@ const UPCOMING_MAINTENANCE_DAYS = 30;
 const UPCOMING_FILTER_VALUE = "__upcoming__";
 
 export function AssetsPage() {
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
+  const canDelete = canManageAssets(user);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -96,6 +99,8 @@ export function AssetsPage() {
 
   const [archiving, setArchiving] = useState<Asset | null>(null);
   const [archivePending, setArchivePending] = useState(false);
+  const [deleting, setDeleting] = useState<Asset | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
 
   const [disposing, setDisposing] = useState<Asset | null>(null);
   const [disposePending, setDisposePending] = useState(false);
@@ -249,6 +254,21 @@ export function AssetsPage() {
       setLocationError(error instanceof ApiError ? error.message : "Konum güncellenemedi.");
     } finally {
       setLocationPending(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!auth || !deleting || deletePending) return;
+    setDeletePending(true);
+    try {
+      await deleteAsset(auth, deleting.id);
+      showToast("Demirbaş silindi.");
+      setDeleting(null);
+      await load();
+    } catch (error) {
+      showToast(error instanceof ApiError ? error.message : "Demirbaş silinemedi.", "error");
+    } finally {
+      setDeletePending(false);
     }
   }
 
@@ -477,9 +497,12 @@ export function AssetsPage() {
                             Elden Çıkar
                           </DropdownItem>
                         ) : null}
-                        <DropdownItem danger onClick={() => setArchiving(asset)}>
-                          Arşivle
-                        </DropdownItem>
+                        <DropdownItem onClick={() => setArchiving(asset)}>Arşivle</DropdownItem>
+                        {canDelete ? (
+                          <DropdownItem danger onClick={() => setDeleting(asset)}>
+                            Sil
+                          </DropdownItem>
+                        ) : null}
                       </Dropdown>
                     </TD>
                   </TR>
@@ -556,10 +579,21 @@ export function AssetsPage() {
         description="Demirbaş aktif listeden kaldırılacak ancak geçmiş hareketleri korunacaktır."
         confirmLabel="Arşivle"
         cancelLabel="Vazgeç"
-        danger
         pending={archivePending}
         onConfirm={() => void handleArchive()}
         onClose={() => (archivePending ? undefined : setArchiving(null))}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title="Demirbaşı silmek istediğinize emin misiniz?"
+        description={deleting ? `"${deleting.name}" ve bağlı hareket/bakım kayıtları kalıcı olarak silinecektir.` : ""}
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        pending={deletePending}
+        onConfirm={() => void handleDelete()}
+        onClose={() => (deletePending ? undefined : setDeleting(null))}
       />
     </PageContainer>
   );

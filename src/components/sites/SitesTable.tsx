@@ -16,6 +16,7 @@ type SitesTableProps = {
   items: Site[];
   loading: boolean;
   canOpenWizard?: boolean;
+  canManage?: boolean;
   onEdit: (site: Site) => void;
   onOpenWizard?: (site: Site) => void;
   onArchive: (site: Site) => void;
@@ -26,6 +27,7 @@ export function SitesTable({
   items,
   loading,
   canOpenWizard = false,
+  canManage = true,
   onEdit,
   onOpenWizard,
   onArchive,
@@ -79,14 +81,20 @@ export function SitesTable({
                         </button>
                       }
                     >
-                      <DropdownItem onClick={() => onEdit(site)}>Düzenle</DropdownItem>
+                      {canManage ? (
+                        <DropdownItem onClick={() => onEdit(site)}>Düzenle</DropdownItem>
+                      ) : null}
                       {canOpenWizard && onOpenWizard ? (
                         <DropdownItem onClick={() => onOpenWizard(site)}>Kurulum Sihirbazı</DropdownItem>
                       ) : null}
-                      <DropdownItem onClick={() => onArchive(site)}>Arşivle</DropdownItem>
-                      <DropdownItem danger onClick={() => onDelete(site)}>
-                        Sil
-                      </DropdownItem>
+                      {canManage ? (
+                        <DropdownItem onClick={() => onArchive(site)}>Arşivle</DropdownItem>
+                      ) : null}
+                      {canManage ? (
+                        <DropdownItem danger onClick={() => onDelete(site)}>
+                          Siteyi Sil
+                        </DropdownItem>
+                      ) : null}
                     </Dropdown>
                   </div>
                 </div>
@@ -162,14 +170,20 @@ export function SitesTable({
                             </button>
                           }
                         >
-                          <DropdownItem onClick={() => onEdit(site)}>Düzenle</DropdownItem>
+                          {canManage ? (
+                            <DropdownItem onClick={() => onEdit(site)}>Düzenle</DropdownItem>
+                          ) : null}
                           {canOpenWizard && onOpenWizard ? (
                             <DropdownItem onClick={() => onOpenWizard(site)}>Kurulum Sihirbazı</DropdownItem>
                           ) : null}
-                          <DropdownItem onClick={() => onArchive(site)}>Arşivle</DropdownItem>
-                          <DropdownItem danger onClick={() => onDelete(site)}>
-                            Sil
-                          </DropdownItem>
+                          {canManage ? (
+                            <DropdownItem onClick={() => onArchive(site)}>Arşivle</DropdownItem>
+                          ) : null}
+                          {canManage ? (
+                            <DropdownItem danger onClick={() => onDelete(site)}>
+                              Siteyi Sil
+                            </DropdownItem>
+                          ) : null}
                         </Dropdown>
                       </TD>
                     </TR>

@@ -280,6 +280,13 @@ export function changeAssetLocation(
 }
 
 export function archiveAsset(auth: AuthContext, id: string) {
+  return apiRequest<{ ok: true }>(`/api/assets/${id}/archive`, {
+    ...auth,
+    method: "POST",
+  });
+}
+
+export function deleteAsset(auth: AuthContext, id: string) {
   return apiRequest<{ ok: true }>(`/api/assets/${id}`, {
     ...auth,
     method: "DELETE",

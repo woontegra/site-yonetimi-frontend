@@ -523,8 +523,10 @@ export function createAdminTenant(
     name: string;
     managerFullName: string;
     managerEmail: string;
-    plan: "DEMO" | "STANDARD" | "PROFESSIONAL";
-    trialDays: number;
+    plan: "DEMO" | "PROFESSIONAL";
+    trialDays?: number;
+    licenseTerm?: "1m" | "3m" | "6m" | "1y" | "custom";
+    endsAt?: string;
   },
 ) {
   return apiRequest<CreateAdminTenantResult>("/api/admin/tenants", {

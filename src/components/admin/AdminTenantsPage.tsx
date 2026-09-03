@@ -59,8 +59,10 @@ export function AdminTenantsPage() {
     name: "",
     managerFullName: "",
     managerEmail: "",
-    plan: "DEMO" as "DEMO" | "STANDARD" | "PROFESSIONAL",
-    trialDays: "14",
+    plan: "DEMO" as "DEMO" | "PROFESSIONAL",
+    trialDays: "7",
+    licenseTerm: "1y" as "1m" | "3m" | "6m" | "1y" | "custom",
+    customEndsAt: "",
   });
   const [created, setCreated] = useState<CreateAdminTenantResult | null>(null);
 
@@ -99,16 +101,49 @@ export function AdminTenantsPage() {
     setPending(true);
     setFormError("");
     try {
-      const result = await createAdminTenant(auth, {
+      const payload: Parameters<typeof createAdminTenant>[1] = {
         name: form.name.trim(),
         managerFullName: form.managerFullName.trim(),
         managerEmail: form.managerEmail.trim(),
         plan: form.plan,
-        trialDays: Number(form.trialDays) || 14,
-      });
+      };
+      if (form.plan === "DEMO") {
+        const days = Number(form.trialDays);
+        if (!Number.isInteger(days) || days < 1) {
+          setFormError("Deneme süresi 1–90 gün olmalıdır.");
+          setPending(false);
+          return;
+        }
+        payload.trialDays = days;
+      } else {
+        payload.licenseTerm = form.licenseTerm;
+        if (form.licenseTerm === "custom") {
+          if (!form.customEndsAt) {
+            setFormError("Özel bitiş tarihi seçin.");
+            setPending(false);
+            return;
+          }
+          const ends = new Date(`${form.customEndsAt}T23:59:59`);
+          if (Number.isNaN(ends.getTime()) || ends.getTime() <= Date.now()) {
+            setFormError("Bitiş tarihi geçmiş olamaz.");
+            setPending(false);
+            return;
+          }
+          payload.endsAt = ends.toISOString();
+        }
+      }
+      const result = await createAdminTenant(auth, payload);
       setCreateOpen(false);
       setCreated(result);
-      setForm({ name: "", managerFullName: "", managerEmail: "", plan: "DEMO", trialDays: "14" });
+      setForm({
+        name: "",
+        managerFullName: "",
+        managerEmail: "",
+        plan: "DEMO",
+        trialDays: "7",
+        licenseTerm: "1y",
+        customEndsAt: "",
+      });
       await load();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Tenant oluşturulamadı.");
@@ -248,13 +283,42 @@ export function AdminTenantsPage() {
           <FormField label="Plan">
             <Select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value as typeof form.plan })}>
               <option value="DEMO">Demo</option>
-              <option value="STANDARD">Standart</option>
               <option value="PROFESSIONAL">Profesyonel</option>
             </Select>
           </FormField>
-          <FormField label="Deneme süresi (gün)">
-            <Input type="number" min={1} max={90} value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: e.target.value })} />
-          </FormField>
+          {form.plan === "DEMO" ? (
+            <FormField label="Deneme süresi (gün)" hint="3, 7 veya 30 gibi değerler birebir uygulanır.">
+              <Input
+                type="number"
+                min={1}
+                max={90}
+                value={form.trialDays}
+                onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
+              />
+            </FormField>
+          ) : (
+            <FormField label="Lisans süresi">
+              <Select
+                value={form.licenseTerm}
+                onChange={(e) => setForm({ ...form, licenseTerm: e.target.value as typeof form.licenseTerm })}
+              >
+                <option value="1m">1 ay</option>
+                <option value="3m">3 ay</option>
+                <option value="6m">6 ay</option>
+                <option value="1y">1 yıl</option>
+                <option value="custom">Özel bitiş tarihi</option>
+              </Select>
+            </FormField>
+          )}
+          {form.plan === "PROFESSIONAL" && form.licenseTerm === "custom" ? (
+            <FormField label="Bitiş tarihi" required className="sm:col-span-2">
+              <Input
+                type="date"
+                value={form.customEndsAt}
+                onChange={(e) => setForm({ ...form, customEndsAt: e.target.value })}
+              />
+            </FormField>
+          ) : null}
           {formError ? <p className="text-[13px] text-danger sm:col-span-2">{formError}</p> : null}
         </div>
       </FormModal>

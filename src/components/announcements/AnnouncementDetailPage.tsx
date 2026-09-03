@@ -13,14 +13,16 @@ import { DetailHeader } from "@/components/layout/DetailHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SectionCard } from "@/components/ui/SurfaceCard";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
+import { canManageAnnouncements } from "@/lib/permissions";
 import {
   ANNOUNCEMENT_PRIORITY_LABELS,
   ANNOUNCEMENT_STATUS_LABELS,
   archiveAnnouncement,
-  cancelAnnouncement,
+  deleteAnnouncement,
   getAnnouncement,
   previewAnnouncementAudience,
   publishAnnouncement,
@@ -33,20 +35,22 @@ import {
 import { ApiError } from "@/lib/http";
 import { formatDateTr } from "@/lib/money";
 
-function InfoItem({ label, value }: { label: string; value: ReactNode }) {
+function dash(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "—";
+}
+
+function audienceKindLabel(type: Announcement["audienceType"]): string {
+  if (type === "ALL_SITE") return "Tüm site";
+  if (type === "BUILDINGS") return "Seçili bina";
+  return "Seçili kişiler";
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm text-ink">{value}</dd>
-    </div>
-  );
-}
-
-function InfoGroup({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="mb-6">
-      <h2 className="mb-3 text-sm font-semibold text-ink">{title}</h2>
-      <dl className="grid grid-cols-2 gap-x-8 gap-y-3 md:grid-cols-4">{children}</dl>
+      <dd className="mt-0.5 break-words text-sm text-ink">{children}</dd>
     </div>
   );
 }
@@ -67,10 +71,11 @@ function statusTone(status: AnnouncementStatus): "neutral" | "success" | "warnin
 export function AnnouncementDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { ready } = useAuth();
+  const { ready, user } = useAuth();
   const { showToast } = useToast();
   const auth = useApiAuth({ requireSite: false });
   const { site } = useActiveSite();
+  const canManage = canManageAnnouncements(user);
 
   const [item, setItem] = useState<Announcement | null>(null);
   const [error, setError] = useState("");
@@ -81,8 +86,8 @@ export function AnnouncementDetailPage() {
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archivePending, setArchivePending] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelPending, setCancelPending] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
 
   const [audiencePreview, setAudiencePreview] = useState<AudiencePreview | null>(null);
@@ -154,18 +159,18 @@ export function AnnouncementDetailPage() {
     }
   }
 
-  async function handleCancel() {
-    if (!auth || !item || cancelPending) return;
-    setCancelPending(true);
+  async function handleDelete() {
+    if (!auth || !item || deletePending) return;
+    setDeletePending(true);
     try {
-      await cancelAnnouncement(auth, item.id);
-      showToast("Duyuru iptal edildi.");
-      setCancelOpen(false);
-      await load();
+      await deleteAnnouncement(auth, item.id);
+      showToast("Duyuru silindi.");
+      setDeleteOpen(false);
+      router.push("/app/duyurular");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Duyuru iptal edilemedi.", "error");
+      showToast(err instanceof ApiError ? err.message : "Duyuru silinemedi.", "error");
     } finally {
-      setCancelPending(false);
+      setDeletePending(false);
     }
   }
 
@@ -189,8 +194,8 @@ export function AnnouncementDetailPage() {
   }
 
   const canMutate = item?.status === "DRAFT" || item?.status === "PUBLISHED";
-  const siteName = item?.site.name || site?.name || "—";
-  const subtitleDate = formatDateTr(item?.publishedAt || item?.publishAt || item?.createdAt);
+  const canArchive = item?.status === "DRAFT" || item?.status === "PUBLISHED";
+  const siteName = dash(item?.site.name || site?.name);
 
   return (
     <PageContainer>
@@ -200,15 +205,20 @@ export function AnnouncementDetailPage() {
         <>
           <DetailHeader
             backHref="/app/duyurular"
-            backLabel="Duyurular"
+            backLabel="Duyurulara dön"
             title={item.title}
-            description={`${siteName} · ${subtitleDate}`}
+            description={`${siteName} · ${formatDateTr(item.createdAt)}`}
             status={
               <Badge tone={statusTone(item.status)}>{ANNOUNCEMENT_STATUS_LABELS[item.status]}</Badge>
             }
             actions={
-              canMutate ? (
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
+                {item.status === "DRAFT" ? (
+                  <Button disabled={publishPending} onClick={() => void handlePublish()}>
+                    {publishPending ? "Yayınlanıyor..." : "Yayınla"}
+                  </Button>
+                ) : null}
+                {canMutate ? (
                   <Button
                     variant="secondary"
                     onClick={() => {
@@ -218,109 +228,99 @@ export function AnnouncementDetailPage() {
                   >
                     Düzenle
                   </Button>
-                  {item.status === "DRAFT" ? (
-                    <Button disabled={publishPending} onClick={() => void handlePublish()}>
-                      {publishPending ? "Yayınlanıyor..." : "Yayınla"}
-                    </Button>
-                  ) : null}
-                  {item.status === "PUBLISHED" ? (
-                    <Button variant="danger" onClick={() => setArchiveOpen(true)}>
-                      Arşivle
-                    </Button>
-                  ) : null}
-                  <Button variant="danger" onClick={() => setCancelOpen(true)}>
-                    İptal et
+                ) : null}
+                {canArchive ? (
+                  <Button variant="secondary" onClick={() => setArchiveOpen(true)}>
+                    Arşivle
                   </Button>
-                </div>
-              ) : undefined
+                ) : null}
+                {canManage ? (
+                  <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+                    Sil
+                  </Button>
+                ) : null}
+              </div>
             }
           />
 
-          <InfoGroup title="Duyuru">
-            <div className="col-span-2 md:col-span-4">
-              <InfoItem
-                label="İçerik"
-                value={<p className="whitespace-pre-wrap">{item.content}</p>}
-              />
-            </div>
-            <InfoItem
-              label="Öncelik"
-              value={
-                <Badge tone={priorityTone(item.priority)}>
-                  {ANNOUNCEMENT_PRIORITY_LABELS[item.priority]}
-                </Badge>
-              }
-            />
-            <InfoItem
-              label="Durum"
-              value={
-                <Badge tone={statusTone(item.status)}>
-                  {ANNOUNCEMENT_STATUS_LABELS[item.status]}
-                </Badge>
-              }
-            />
-            {item.createdByUser?.fullName ? (
-              <InfoItem label="Oluşturan" value={item.createdByUser.fullName} />
-            ) : null}
-          </InfoGroup>
+          <div className="grid grid-cols-1 gap-4">
+            <SectionCard title="Duyuru İçeriği">
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Başlık">{dash(item.title)}</Field>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <Badge tone={priorityTone(item.priority)}>
+                    {ANNOUNCEMENT_PRIORITY_LABELS[item.priority]}
+                  </Badge>
+                  <Badge tone={statusTone(item.status)}>
+                    {ANNOUNCEMENT_STATUS_LABELS[item.status]}
+                  </Badge>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Duyuru metni">
+                    <p className="whitespace-pre-wrap break-words">{dash(item.content)}</p>
+                  </Field>
+                </div>
+              </dl>
+            </SectionCard>
 
-          <InfoGroup title="Hedef">
-            <InfoItem label="Hedef Kitle" value={item.audienceLabel} />
-            <InfoItem label="Özet" value={item.targetSummary || "—"} />
-            {item.audienceType === "BUILDINGS" ? (
-              <div className="col-span-2 md:col-span-4">
-                <InfoItem
-                  label="Binalar"
-                  value={
-                    item.buildings.length > 0
-                      ? item.buildings.map((building) => building.name).join(", ")
-                      : "—"
-                  }
-                />
-              </div>
-            ) : null}
-            {item.audienceType === "APARTMENTS" ? (
-              <div className="col-span-2 md:col-span-4">
-                <InfoItem
-                  label="Daireler"
-                  value={
-                    item.apartments.length > 0
-                      ? item.apartments
-                          .map(
-                            (apartment) =>
-                              `${apartment.building.name} · Daire ${apartment.number}`,
-                          )
-                          .join(", ")
-                      : "—"
-                  }
-                />
-              </div>
-            ) : null}
-            <div className="col-span-2 md:col-span-4">
-              <Button
-                variant="secondary"
-                disabled={previewPending}
-                onClick={() => void handlePreviewAudience()}
-              >
-                {previewPending ? "Önizleniyor..." : "Hedef kitleyi önizle"}
-              </Button>
-              {previewError ? <p className="mt-2 text-sm text-danger">{previewError}</p> : null}
+            <SectionCard
+              title="Hedef Kitle"
+              action={
+                <Button
+                  variant="secondary"
+                  disabled={previewPending}
+                  onClick={() => void handlePreviewAudience()}
+                >
+                  {previewPending ? "Önizleniyor..." : "Hedef Kitleyi Önizle"}
+                </Button>
+              }
+            >
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Hedef">{audienceKindLabel(item.audienceType)}</Field>
+                <Field label="Hedef kitle özeti">{dash(item.targetSummary)}</Field>
+                {item.audienceType === "BUILDINGS" ? (
+                  <div className="sm:col-span-2">
+                    <Field label="Binalar">
+                      {item.buildings.length > 0
+                        ? item.buildings.map((building) => building.name).join(", ")
+                        : "—"}
+                    </Field>
+                  </div>
+                ) : null}
+                {item.audienceType === "APARTMENTS" ? (
+                  <div className="sm:col-span-2">
+                    <Field label="Daireler">
+                      {item.apartments.length > 0
+                        ? item.apartments
+                            .map((apartment) => `${apartment.building.name} · Daire ${apartment.number}`)
+                            .join(", ")
+                        : "—"}
+                    </Field>
+                  </div>
+                ) : null}
+              </dl>
+              {previewError ? <p className="mt-3 text-sm text-danger">{previewError}</p> : null}
               {audiencePreview ? (
-                <p className="mt-2 text-sm text-muted">
+                <p className="mt-3 text-sm text-muted">
                   {audiencePreview.apartmentCount} daire · {audiencePreview.recipientCount} kişi ·{" "}
                   {audiencePreview.withPhoneCount} telefonlu
                   {audiencePreview.truncated ? " (liste kısaltıldı)" : ""}
                 </p>
               ) : null}
-            </div>
-          </InfoGroup>
+            </SectionCard>
 
-          <InfoGroup title="Yayın">
-            <InfoItem label="Yayın Tarihi" value={formatDateTr(item.publishedAt || item.publishAt)} />
-            <InfoItem label="Son Geçerlilik" value={formatDateTr(item.expiresAt)} />
-            <InfoItem label="Oluşturma" value={formatDateTr(item.createdAt)} />
-            <InfoItem label="Güncelleme" value={formatDateTr(item.updatedAt)} />
-          </InfoGroup>
+            <SectionCard title="Yayın Bilgileri">
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Yayın tarihi">{formatDateTr(item.publishedAt || item.publishAt)}</Field>
+                <Field label="Son geçerlilik">{formatDateTr(item.expiresAt)}</Field>
+                <Field label="Oluşturulma tarihi">{formatDateTr(item.createdAt)}</Field>
+                <Field label="Son güncelleme">{formatDateTr(item.updatedAt)}</Field>
+                {item.createdByUser?.fullName ? (
+                  <Field label="Oluşturan kullanıcı">{item.createdByUser.fullName}</Field>
+                ) : null}
+              </dl>
+            </SectionCard>
+          </div>
 
           {canMutate ? (
             <AnnouncementFormModal
@@ -341,22 +341,21 @@ export function AnnouncementDetailPage() {
             description="Duyuru yayından kaldırılacak ve geçmiş sekmesine taşınacaktır."
             confirmLabel="Arşivle"
             cancelLabel="Vazgeç"
-            danger
             pending={archivePending}
             onConfirm={() => void handleArchive()}
             onClose={() => (archivePending ? undefined : setArchiveOpen(false))}
           />
 
           <ConfirmDialog
-            open={cancelOpen}
-            title="Duyuru iptal edilsin mi?"
-            description="Duyuru iptal edilecek. Bu işlem geri alınamaz."
-            confirmLabel="İptal et"
+            open={deleteOpen}
+            title="Duyuruyu silmek istediğinize emin misiniz?"
+            description={`"${item.title}" kalıcı olarak silinecektir.`}
+            confirmLabel="Sil"
             cancelLabel="Vazgeç"
             danger
-            pending={cancelPending}
-            onConfirm={() => void handleCancel()}
-            onClose={() => (cancelPending ? undefined : setCancelOpen(false))}
+            pending={deletePending}
+            onConfirm={() => void handleDelete()}
+            onClose={() => (deletePending ? undefined : setDeleteOpen(false))}
           />
         </>
       ) : null}

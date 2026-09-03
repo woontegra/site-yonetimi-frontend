@@ -15,3 +15,15 @@ export function canManageSites(user: SessionUser | null | undefined): boolean {
   if (!user.permissions?.length) return true;
   return hasPermission(user, "sites.manage");
 }
+
+export function canManageAssets(user: SessionUser | null | undefined): boolean {
+  if (!user) return false;
+  if (!user.permissions?.length) return true;
+  return hasPermission(user, "assets.manage");
+}
+
+export function canManageAnnouncements(user: SessionUser | null | undefined): boolean {
+  if (!user) return false;
+  if (!user.permissions?.length) return true;
+  return hasPermission(user, "announcements.manage");
+}
