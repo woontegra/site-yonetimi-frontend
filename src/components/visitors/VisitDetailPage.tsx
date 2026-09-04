@@ -49,7 +49,7 @@ function statusTone(status: VisitStatus) {
 export function VisitDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
 
   const [visit, setVisit] = useState<Visit | null>(null);
@@ -91,7 +91,7 @@ export function VisitDetailPage() {
       setCheckOutOpen(false);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Çıkış yapılamadı.", "error");
+      toastError(err, "Çıkış yapılamadı.");
     } finally {
       setCheckOutPending(false);
     }
@@ -106,7 +106,7 @@ export function VisitDetailPage() {
       setCancelOpen(false);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Ziyaret iptal edilemedi.", "error");
+      toastError(err, "Ziyaret iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }

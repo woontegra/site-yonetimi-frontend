@@ -34,6 +34,8 @@ type ApartmentComboboxProps = {
   placeholder?: string;
   emptyMessage?: string;
   className?: string;
+  /** Open the list immediately (manual match drawer). */
+  defaultOpen?: boolean;
 };
 
 const LIST_MAX_HEIGHT = 280;
@@ -49,12 +51,13 @@ export function ApartmentCombobox({
   placeholder = "Daire veya kişi ara…",
   emptyMessage = "Bu aramayla eşleşen daire veya kişi bulunamadı.",
   className,
+  defaultOpen = false,
 }: ApartmentComboboxProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const [menuBox, setMenuBox] = useState({ top: 0, left: 0, width: 0 });
@@ -67,6 +70,13 @@ export function ApartmentCombobox({
     const q = open ? query : "";
     return sorted.filter((apartment) => apartmentMatchesQuery(apartment, q));
   }, [sorted, open, query]);
+
+  useEffect(() => {
+    if (!defaultOpen || disabled) return;
+    setOpen(true);
+    const t = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => window.clearTimeout(t);
+  }, [defaultOpen, disabled]);
 
   useLayoutEffect(() => {
     if (!open || !rootRef.current) return;
@@ -196,7 +206,7 @@ export function ApartmentCombobox({
               id={listId}
               role="listbox"
               aria-label="Daire listesi"
-              className="fixed z-[80] overflow-hidden rounded-md border border-line bg-surface shadow-modal"
+              className="fixed z-[90] overflow-hidden rounded-md border border-line bg-surface shadow-modal"
               style={{
                 top: menuBox.top,
                 left: menuBox.left,
@@ -230,12 +240,9 @@ export function ApartmentCombobox({
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-ink">
-                                Daire {view.apartmentNumber}
-                              </p>
-                              <p className="truncate text-xs text-muted">{view.buildingName}</p>
-                            </div>
+                            <p className="min-w-0 truncate text-sm font-medium text-ink">
+                              {view.buildingName} · Daire {view.apartmentNumber}
+                            </p>
                             {active ? (
                               <Check className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
                             ) : null}

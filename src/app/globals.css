@@ -21,11 +21,93 @@
   --color-info: #3d5a73;
   --color-info-subtle: #eef3f6;
 
+  /* Semantic pastel card tones — low saturation, readable ink */
+  --tone-neutral-bg: #ffffff;
+  --tone-neutral-header: #f8fafb;
+  --tone-neutral-border: #e6eaee;
+  --tone-neutral-icon-bg: #eef2f4;
+  --tone-neutral-icon: #5c6b76;
+  --tone-neutral-metric: #f5f7f8;
+  --tone-neutral-empty: #f8fafb;
+  --tone-neutral-hover: #f1f4f6;
+  --tone-neutral-accent: #c5ced5;
+
+  --tone-teal-bg: #f3faf9;
+  --tone-teal-header: #eaf6f5;
+  --tone-teal-border: #cfe6e4;
+  --tone-teal-icon-bg: #d7efed;
+  --tone-teal-icon: #0f5f63;
+  --tone-teal-metric: #e8f5f4;
+  --tone-teal-empty: #f0f9f8;
+  --tone-teal-hover: #e4f3f2;
+  --tone-teal-accent: #2a8a8f;
+
+  --tone-blue-bg: #f4f8fc;
+  --tone-blue-header: #ebf2f9;
+  --tone-blue-border: #d0deec;
+  --tone-blue-icon-bg: #dce8f4;
+  --tone-blue-icon: #3a5f7a;
+  --tone-blue-metric: #e8f0f8;
+  --tone-blue-empty: #f1f6fb;
+  --tone-blue-hover: #e4edf6;
+  --tone-blue-accent: #4a7a9b;
+
+  --tone-green-bg: #f4faf6;
+  --tone-green-header: #eaf6ef;
+  --tone-green-border: #cfe5d7;
+  --tone-green-icon-bg: #d8eedf;
+  --tone-green-icon: #157a45;
+  --tone-green-metric: #e8f5ec;
+  --tone-green-empty: #f0f8f3;
+  --tone-green-hover: #e3f3e9;
+  --tone-green-accent: #2d9a5a;
+
+  --tone-amber-bg: #fdf9f3;
+  --tone-amber-header: #faf3e8;
+  --tone-amber-border: #ecdcc4;
+  --tone-amber-icon-bg: #f3e6d0;
+  --tone-amber-icon: #a16207;
+  --tone-amber-metric: #f8efdf;
+  --tone-amber-empty: #fbf6ee;
+  --tone-amber-hover: #f5ebdc;
+  --tone-amber-accent: #c47d12;
+
+  --tone-violet-bg: #f8f6fb;
+  --tone-violet-header: #f1edf8;
+  --tone-violet-border: #ddd4eb;
+  --tone-violet-icon-bg: #e6ddf2;
+  --tone-violet-icon: #6b5090;
+  --tone-violet-metric: #efeaf6;
+  --tone-violet-empty: #f5f2f9;
+  --tone-violet-hover: #ece6f4;
+  --tone-violet-accent: #7d64a3;
+
+  --tone-rose-bg: #fcf6f6;
+  --tone-rose-header: #f9eeee;
+  --tone-rose-border: #ecd5d4;
+  --tone-rose-icon-bg: #f3dddc;
+  --tone-rose-icon: #b44a45;
+  --tone-rose-metric: #f7eaea;
+  --tone-rose-empty: #faf2f2;
+  --tone-rose-hover: #f4e6e6;
+  --tone-rose-accent: #c75a54;
+
+  --tone-cyan-bg: #f3fafb;
+  --tone-cyan-header: #e8f5f7;
+  --tone-cyan-border: #c9e4e9;
+  --tone-cyan-icon-bg: #d4eef2;
+  --tone-cyan-icon: #0f6f7a;
+  --tone-cyan-metric: #e5f4f7;
+  --tone-cyan-empty: #eef8fa;
+  --tone-cyan-hover: #e0f1f4;
+  --tone-cyan-accent: #1a8a96;
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
 
   --shadow-panel: 0 1px 2px rgba(21, 32, 43, 0.04), 0 1px 1px rgba(21, 32, 43, 0.02);
+  --shadow-panel-hover: 0 4px 12px rgba(21, 32, 43, 0.07), 0 1px 2px rgba(21, 32, 43, 0.04);
   --shadow-menu: 0 8px 24px rgba(21, 32, 43, 0.1);
   --shadow-modal: 0 16px 40px rgba(21, 32, 43, 0.14), 0 2px 8px rgba(21, 32, 43, 0.04);
 

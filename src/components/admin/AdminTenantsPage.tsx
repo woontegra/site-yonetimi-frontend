@@ -43,7 +43,7 @@ function deliveryLabel(item: EmailDelivery | null): string {
 export function AdminTenantsPage() {
   const { ready } = useAuth();
   const auth = useAdminAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -347,7 +347,7 @@ export function AdminTenantsPage() {
                         result.welcome?.status === "SENT" ? "success" : "error",
                       );
                     } catch (err) {
-                      showToast(err instanceof ApiError ? err.message : "Yeniden gönderilemedi.", "error");
+                      toastError(err, "Yeniden gönderilemedi.");
                     } finally {
                       setPending(false);
                     }
@@ -378,7 +378,7 @@ export function AdminTenantsPage() {
                         result.platformNotification?.status === "SENT" ? "success" : "error",
                       );
                     } catch (err) {
-                      showToast(err instanceof ApiError ? err.message : "Yeniden gönderilemedi.", "error");
+                      toastError(err, "Yeniden gönderilemedi.");
                     } finally {
                       setPending(false);
                     }

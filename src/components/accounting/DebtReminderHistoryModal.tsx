@@ -36,7 +36,7 @@ function statusTone(status: MessageStatus): "neutral" | "success" | "warning" | 
 
 export function DebtReminderHistoryModal({ open, onClose }: DebtReminderHistoryModalProps) {
   const auth = useApiAuth({ requireSite: true });
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   useCloseFormOnSiteChange(open, onClose);
 
   const [batches, setBatches] = useState<CommunicationBatch[]>([]);
@@ -59,7 +59,7 @@ export function DebtReminderHistoryModal({ open, onClose }: DebtReminderHistoryM
       setBatches(batchResult.items);
       setMessages(messageResult.items);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Geçmiş yüklenemedi.", "error");
+      toastError(error, "Geçmiş yüklenemedi.");
       setMessages([]);
     } finally {
       setLoading(false);

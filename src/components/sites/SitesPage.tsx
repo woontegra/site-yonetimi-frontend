@@ -15,6 +15,7 @@ import {
 import { SitesCatalog, ViewModeToggle, type SitesViewMode } from "@/components/sites/SitesCatalog";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
@@ -56,7 +57,7 @@ type StatusFilter = "hepsi" | "aktif" | "pasif";
 
 export function SitesPage() {
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
   const { refreshSites, siteId, sites } = useActiveSite();
   const { openWizard } = useSiteSetupWizard();
@@ -159,14 +160,14 @@ export function SitesPage() {
       const payload = formToSitePayload(values);
       if (editing) {
         await updateSite(auth, editing.id, payload);
-        showToast("Site güncellendi.");
+        showToast("Site bilgileri güncellendi.");
         setFormOpen(false);
         setEditing(null);
         await refreshSites();
         await load();
       } else {
         const { site: created } = await createSite(auth, payload);
-        showToast("Site oluşturuldu.");
+        showToast("Site başarıyla oluşturuldu.");
         setFormOpen(false);
         setEditing(null);
         await refreshSites({
@@ -203,7 +204,7 @@ export function SitesPage() {
       });
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Site arşivlenemedi.", "error");
+      toastError(error, "Site arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }
@@ -238,7 +239,7 @@ export function SitesPage() {
       });
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Site silinemedi.", "error");
+      toastError(error, "Site silinemedi.");
     } finally {
       setDeletePending(false);
     }
@@ -321,6 +322,8 @@ export function SitesPage() {
         }
         confirmLabel="Arşivle"
         pending={archivePending}
+        pendingLabel="Arşivleniyor…"
+        alert="Arşivlemek mevcut borçları silmez."
         onConfirm={() => void handleArchive()}
         onClose={() => setArchiving(null)}
       />
@@ -348,6 +351,9 @@ export function SitesPage() {
           </>
         }
       >
+        <AlertBanner tone="danger" title="Dikkat" className="mb-3">
+          Bu işlem geri alınamaz.
+        </AlertBanner>
         {deletePreviewError ? <p className="mb-3 text-sm text-danger">{deletePreviewError}</p> : null}
         <dl className="grid grid-cols-2 gap-2 text-sm">
           {(

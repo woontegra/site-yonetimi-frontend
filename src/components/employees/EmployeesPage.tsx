@@ -42,7 +42,7 @@ const PER_PAGE = 20;
 
 export function EmployeesPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
 
@@ -119,7 +119,7 @@ export function EmployeesPage() {
       setEditing(result.employee);
       setFormOpen(true);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Çalışan yüklenemedi.", "error");
+      toastError(error, "Çalışan yüklenemedi.");
     }
   }
 
@@ -162,7 +162,7 @@ export function EmployeesPage() {
       setArchiving(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Çalışan arşivlenemedi.", "error");
+      toastError(error, "Çalışan arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

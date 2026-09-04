@@ -72,7 +72,7 @@ export function AnnouncementDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
   const { site } = useActiveSite();
   const canManage = canManageAnnouncements(user);
@@ -138,7 +138,7 @@ export function AnnouncementDetailPage() {
       showToast("Duyuru yayınlandı.");
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Duyuru yayınlanamadı.", "error");
+      toastError(err, "Duyuru yayınlanamadı.");
     } finally {
       setPublishPending(false);
     }
@@ -153,7 +153,7 @@ export function AnnouncementDetailPage() {
       setArchiveOpen(false);
       router.push("/app/duyurular");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Duyuru arşivlenemedi.", "error");
+      toastError(err, "Duyuru arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }
@@ -168,7 +168,7 @@ export function AnnouncementDetailPage() {
       setDeleteOpen(false);
       router.push("/app/duyurular");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Duyuru silinemedi.", "error");
+      toastError(err, "Duyuru silinemedi.");
     } finally {
       setDeletePending(false);
     }

@@ -2,6 +2,24 @@ import type { Apartment, ApartmentPersonSummary } from "@/lib/apartments-api";
 
 export type ApartmentOccupantRole = "OWNER" | "TENANT";
 
+export type ApartmentResidentParts = {
+  buildingName: string;
+  apartmentNumber: string;
+  owners: Array<Pick<ApartmentPersonSummary, "id" | "fullName"> & { phone?: string | null }>;
+  tenants: Array<Pick<ApartmentPersonSummary, "id" | "fullName"> & { phone?: string | null }>;
+};
+
+export type ApartmentResidentDisplay = {
+  /** e.g. "B Blok · Daire 6 — Serdar Topal" */
+  label: string;
+  /** Compact person part after em dash */
+  personLine: string;
+  /** e.g. "Kiracı: Ayşe Kaya" when owner is primary and tenant exists */
+  secondaryLine: string | null;
+  ownersLine: string | null;
+  tenantsLine: string | null;
+};
+
 export type ApartmentOccupantView = {
   apartmentId: string;
   apartmentNumber: string;
@@ -15,7 +33,7 @@ export type ApartmentOccupantView = {
   primaryRoleLabel: string | null;
   /** e.g. "Serdar Topal · Kiracı" or "Mehmet Kaya +1" or "Kişi atanmamış" */
   personLine: string;
-  /** e.g. "Daire 6 — Serdar Topal · Kiracı" */
+  /** e.g. "B Blok · Daire 6 — Serdar Topal" */
   label: string;
   openDebtAmount: number;
   overdueDebtAmount: number;
@@ -34,6 +52,58 @@ export function foldSearchText(value: string): string {
 
 function roleLabel(role: ApartmentOccupantRole): string {
   return role === "TENANT" ? "Kiracı" : "Malik";
+}
+
+function formatOwnerNames(
+  owners: Array<Pick<ApartmentPersonSummary, "fullName">>,
+): string | null {
+  if (owners.length === 0) return null;
+  if (owners.length === 1) return owners[0]!.fullName;
+  return `${owners[0]!.fullName} +${owners.length - 1} malik`;
+}
+
+function formatTenantNames(
+  tenants: Array<Pick<ApartmentPersonSummary, "fullName">>,
+): string | null {
+  if (tenants.length === 0) return null;
+  if (tenants.length === 1) return tenants[0]!.fullName;
+  return `${tenants[0]!.fullName} +${tenants.length - 1} kiracı`;
+}
+
+/**
+ * Ortak daire+kişi gösterimi (malik öncelikli).
+ * Temel: "B Blok · Daire 6 — Serdar Topal"
+ * Kiracı varsa secondaryLine: "Kiracı: Ayşe Kaya"
+ */
+export function getApartmentResidentDisplay(
+  parts: ApartmentResidentParts,
+): ApartmentResidentDisplay {
+  const ownersLine = formatOwnerNames(parts.owners);
+  const tenantsLine = formatTenantNames(parts.tenants);
+
+  let personLine: string;
+  let secondaryLine: string | null = null;
+
+  if (ownersLine) {
+    personLine = ownersLine;
+    if (tenantsLine) secondaryLine = `Kiracı: ${tenantsLine}`;
+  } else if (tenantsLine) {
+    personLine = tenantsLine;
+  } else {
+    personLine = "Kişi atanmamış";
+  }
+
+  return {
+    label: `${parts.buildingName} · Daire ${parts.apartmentNumber} — ${personLine}`,
+    personLine,
+    secondaryLine,
+    ownersLine,
+    tenantsLine,
+  };
+}
+
+export function formatApartmentResidentLabel(parts: ApartmentResidentParts): string {
+  return getApartmentResidentDisplay(parts).label;
 }
 
 function buildPersonLine(
@@ -80,6 +150,12 @@ export function getApartmentOccupantView(apartment: Apartment): ApartmentOccupan
   const built = buildPersonLine(owners, tenants);
   const openDebtAmount = Number(apartment.debtStatus?.openAmount ?? 0);
   const overdueDebtAmount = Number(apartment.debtStatus?.overdueAmount ?? 0);
+  const resident = getApartmentResidentDisplay({
+    buildingName: apartment.building.name,
+    apartmentNumber: apartment.number,
+    owners,
+    tenants,
+  });
 
   return {
     apartmentId: apartment.id,
@@ -89,7 +165,7 @@ export function getApartmentOccupantView(apartment: Apartment): ApartmentOccupan
     owners,
     tenants,
     ...built,
-    label: `Daire ${apartment.number} — ${built.personLine}`,
+    label: resident.label,
     openDebtAmount: Number.isFinite(openDebtAmount) ? openDebtAmount : 0,
     overdueDebtAmount: Number.isFinite(overdueDebtAmount) ? overdueDebtAmount : 0,
   };
@@ -97,7 +173,12 @@ export function getApartmentOccupantView(apartment: Apartment): ApartmentOccupan
 
 /** Shared plain-text label for selects, lists, and matching UIs. */
 export function formatApartmentOccupantLabel(apartment: Apartment): string {
-  return getApartmentOccupantView(apartment).label;
+  return formatApartmentResidentLabel({
+    buildingName: apartment.building.name,
+    apartmentNumber: apartment.number,
+    owners: apartment.owners ?? [],
+    tenants: apartment.tenants ?? [],
+  });
 }
 
 export function apartmentSearchHaystack(apartment: Apartment): string {
@@ -123,6 +204,14 @@ export function apartmentSearchHaystack(apartment: Apartment): string {
 export function apartmentMatchesQuery(apartment: Apartment, query: string): boolean {
   const trimmed = query.trim();
   if (!trimmed) return true;
+
+  const daireNum = trimmed.match(/^(?:daire\s*)?#?\s*(\d{1,4}[a-zA-Z]?)$/i);
+  if (daireNum?.[1]) {
+    const want = foldSearchText(daireNum[1]);
+    if (foldSearchText(apartment.number) === want) return true;
+    return false;
+  }
+
   const needle = foldSearchText(trimmed);
   return apartmentSearchHaystack(apartment).includes(needle);
 }

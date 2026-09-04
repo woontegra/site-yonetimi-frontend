@@ -53,7 +53,7 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 export function SupplierDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
 
   const [supplier, setSupplier] = useState<SupplierDetail | null>(null);
@@ -136,7 +136,7 @@ export function SupplierDetailPage() {
       setArchiveOpen(false);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Tedarikçi arşivlenemedi.", "error");
+      toastError(err, "Tedarikçi arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

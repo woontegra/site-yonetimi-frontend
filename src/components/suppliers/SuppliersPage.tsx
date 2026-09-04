@@ -38,7 +38,7 @@ const PER_PAGE = 20;
 
 export function SuppliersPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
 
   const [search, setSearch] = useState("");
@@ -106,7 +106,7 @@ export function SuppliersPage() {
       setEditing(result.supplier);
       setFormOpen(true);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Tedarikçi yüklenemedi.", "error");
+      toastError(error, "Tedarikçi yüklenemedi.");
     }
   }
 
@@ -142,7 +142,7 @@ export function SuppliersPage() {
       setArchiving(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Tedarikçi arşivlenemedi.", "error");
+      toastError(error, "Tedarikçi arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

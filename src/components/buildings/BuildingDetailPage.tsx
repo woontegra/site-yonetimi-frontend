@@ -103,7 +103,7 @@ export function BuildingDetailPage() {
   const params = useParams<{ id: string }>();
   const buildingId = String(params.id);
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
   const { site, siteId } = useActiveSite();
   const { openWizard } = useSiteSetupWizard();
@@ -225,7 +225,7 @@ export function BuildingDetailPage() {
       );
       setBuilding(result.building);
       setFormOpen(false);
-      showToast("Bina güncellendi.");
+      showToast("Bina bilgileri güncellendi.");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Kayıt kaydedilemedi.");
     } finally {
@@ -253,7 +253,7 @@ export function BuildingDetailPage() {
       setActivating(false);
       showToast(nextActive ? "Bina aktifleştirildi." : "Bina arşivlendi.");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Durum güncellenemedi.", "error");
+      toastError(err, "Durum güncellenemedi.");
     } finally {
       setStatusPending(false);
     }
@@ -268,7 +268,7 @@ export function BuildingDetailPage() {
       setDeletingBuilding(false);
       window.location.href = "/app/binalar";
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Bina silinemedi.", "error");
+      toastError(err, "Bina silinemedi.");
     } finally {
       setBuildingDeletePending(false);
     }
@@ -288,10 +288,10 @@ export function BuildingDetailPage() {
       const authForSite = { ...auth, siteId: targetSiteId };
       if (editingApartment) {
         await updateApartment(authForSite, editingApartment.id, payload);
-        showToast("Daire güncellendi.");
+        showToast("Daire bilgileri güncellendi.");
       } else {
         await createApartment(authForSite, payload);
-        showToast("Daire oluşturuldu.");
+        showToast("Daire başarıyla oluşturuldu.");
       }
       setApartmentFormOpen(false);
       setEditingApartment(null);
@@ -312,7 +312,7 @@ export function BuildingDetailPage() {
       setDeletingApartment(null);
       await Promise.all([load(), loadApartments()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Daire silinemedi.", "error");
+      toastError(err, "Daire silinemedi.");
     } finally {
       setDeletePending(false);
     }

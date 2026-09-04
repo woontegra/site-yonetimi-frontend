@@ -73,7 +73,7 @@ export function FeedbackDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
   const { site } = useActiveSite();
 
@@ -155,7 +155,7 @@ export function FeedbackDetailPage() {
       setResolution("");
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Durum güncellenemedi.", "error");
+      toastError(err, "Durum güncellenemedi.");
     } finally {
       setStatusPending(false);
     }
@@ -169,7 +169,7 @@ export function FeedbackDetailPage() {
       showToast("Kayıt arşivlendi.");
       router.push("/app/bilgi-oneri");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Arşivlenemedi.", "error");
+      toastError(err, "Arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

@@ -2,21 +2,22 @@
 
 import type { LucideIcon } from "lucide-react";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
+import { cardTone, type CardTone } from "@/lib/card-tones";
 import { cn } from "@/lib/cn";
 
-const tones = {
-  success: "bg-emerald-50 text-success",
-  warning: "bg-amber-50 text-warning",
-  danger: "bg-rose-50 text-danger",
-  brand: "bg-brand-soft text-brand",
-  neutral: "bg-canvas text-muted",
-} as const;
+const legacyToneMap = {
+  success: "green",
+  warning: "amber",
+  danger: "rose",
+  brand: "teal",
+  neutral: "neutral",
+} as const satisfies Record<string, CardTone>;
 
 type FinanceMetricCardProps = {
   label: string;
   value: string;
   icon: LucideIcon;
-  tone?: keyof typeof tones;
+  tone?: keyof typeof legacyToneMap | CardTone;
 };
 
 export function FinanceMetricCard({
@@ -25,20 +26,26 @@ export function FinanceMetricCard({
   icon: Icon,
   tone = "neutral",
 }: FinanceMetricCardProps) {
+  const resolved: CardTone =
+    tone in legacyToneMap
+      ? legacyToneMap[tone as keyof typeof legacyToneMap]
+      : (tone as CardTone);
+  const tones = cardTone(resolved);
+
   return (
-    <SurfaceCard padding="sm" className="min-w-0">
+    <SurfaceCard padding="sm" tone={resolved} className="min-w-0">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-caption text-muted">{label}</p>
+        <p className="text-caption font-medium text-muted">{label}</p>
         <span
           className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-md",
-            tones[tone],
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            tones.icon,
           )}
         >
           <Icon className="size-4" aria-hidden />
         </span>
       </div>
-      <p className="mt-2 text-right break-words text-[1.2rem] font-medium leading-tight tracking-tight text-ink sm:text-[1.3rem]">
+      <p className="mt-2 text-right break-words text-[1.2rem] font-semibold leading-tight tracking-tight text-ink sm:text-[1.3rem]">
         {value}
       </p>
     </SurfaceCard>

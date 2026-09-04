@@ -40,7 +40,7 @@ const PER_PAGE = 20;
 
 export function PersonsPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { siteId, hasSites, site } = useActiveSite();
   const { openWizard } = useSiteSetupWizard();
@@ -123,7 +123,7 @@ export function PersonsPage() {
       setEditing(result.person);
       setFormOpen(true);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kişi yüklenemedi.", "error");
+      toastError(error, "Kişi yüklenemedi.");
     }
   }
 
@@ -166,7 +166,7 @@ export function PersonsPage() {
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kişi silinemedi.", "error");
+      toastError(error, "Kişi silinemedi.");
     } finally {
       setDeletePending(false);
     }

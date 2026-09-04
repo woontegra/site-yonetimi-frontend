@@ -79,7 +79,7 @@ export function SiteSetupWizard({
   const router = useRouter();
   const auth = useApiAuth({ requireSite: true });
   const { siteId, site, refreshSites } = useActiveSite();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
 
   const [step, setStep] = useState(initialStep);
   const [summary, setSummary] = useState<SetupSummary | null>(null);
@@ -377,7 +377,7 @@ export function SiteSetupWizard({
       onCompleted?.();
       onClose();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setPending(false);
     }
@@ -398,7 +398,7 @@ export function SiteSetupWizard({
         router.push("/app");
       }
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setPending(false);
     }

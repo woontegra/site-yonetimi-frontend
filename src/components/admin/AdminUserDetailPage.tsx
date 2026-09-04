@@ -40,7 +40,7 @@ export function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { ready } = useAuth();
   const auth = useAdminAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [tab, setTab] = useState<Tab>("genel");
   const [user, setUser] = useState<AdminUserDetail | null>(null);
   const [logs, setLogs] = useState<AdminAuditLog[]>([]);
@@ -80,7 +80,7 @@ export function AdminUserDetailPage() {
       showToast(message);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setPending(false);
       setConfirm(null);

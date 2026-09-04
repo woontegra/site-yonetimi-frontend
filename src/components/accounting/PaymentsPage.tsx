@@ -97,7 +97,7 @@ function relatedLabel(payment: Payment) {
 
 export function PaymentsPage() {
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { hasSites } = useActiveSite();
 
@@ -275,7 +275,12 @@ export function PaymentsPage() {
     setCollectError("");
     try {
       await createPayment({ ...auth, siteId }, payload, crypto.randomUUID());
-      showToast("Tahsilat kaydedildi.");
+      showToast(
+        `${Number(payload.amount).toLocaleString("tr-TR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        })} TL tahsilat kaydedildi.`,
+      );
       setCollectOpen(false);
       await Promise.all([loadList(), loadMetrics(), loadDebtReminder()]);
     } catch (err) {
@@ -290,11 +295,11 @@ export function PaymentsPage() {
     setCancelPending(true);
     try {
       await cancelPayment(auth, cancelling.id);
-      showToast("Tahsilat iptal edildi.");
+      showToast("Tahsilat iptal edildi ve borç bakiyeleri geri yüklendi.");
       setCancelling(null);
       await Promise.all([loadList(), loadMetrics(), loadDebtReminder()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Tahsilat iptal edilemedi.", "error");
+      toastError(err, "Tahsilat iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }
@@ -555,6 +560,8 @@ export function PaymentsPage() {
         cancelLabel="Vazgeç"
         danger
         pending={cancelPending}
+        pendingLabel="İptal ediliyor…"
+        alert="Bu işlem geri alınamaz."
         onConfirm={() => void handleCancel()}
         onClose={() => (cancelPending ? undefined : setCancelling(null))}
       />

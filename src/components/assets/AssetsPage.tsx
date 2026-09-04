@@ -57,7 +57,7 @@ const UPCOMING_FILTER_VALUE = "__upcoming__";
 
 export function AssetsPage() {
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
   const canDelete = canManageAssets(user);
@@ -186,7 +186,7 @@ export function AssetsPage() {
       setEditing(result.asset);
       setFormOpen(true);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Demirbaş yüklenemedi.", "error");
+      toastError(error, "Demirbaş yüklenemedi.");
     }
   }
 
@@ -266,7 +266,7 @@ export function AssetsPage() {
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Demirbaş silinemedi.", "error");
+      toastError(error, "Demirbaş silinemedi.");
     } finally {
       setDeletePending(false);
     }
@@ -281,7 +281,7 @@ export function AssetsPage() {
       setArchiving(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Demirbaş arşivlenemedi.", "error");
+      toastError(error, "Demirbaş arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }
@@ -296,10 +296,7 @@ export function AssetsPage() {
       setDisposing(null);
       await load();
     } catch (error) {
-      showToast(
-        error instanceof ApiError ? error.message : "Demirbaş elden çıkarılamadı.",
-        "error",
-      );
+      toastError(error, "Demirbaş elden çıkarılamadı.");
     } finally {
       setDisposePending(false);
     }
@@ -390,7 +387,7 @@ export function AssetsPage() {
       {listError ? <p className="mb-3 text-sm text-danger">{listError}</p> : null}
 
       {showEmptyState ? (
-        <SurfaceCard className="flex flex-col items-center">
+        <SurfaceCard tone="amber" className="flex flex-col items-center">
           <TableEmptyState
             title="Henüz demirbaş eklenmedi."
             description="Kategoriler hazır. İlk demirbaşınızı ekleyerek kamera, yangın tüpü, bahçe ekipmanı ve diğer site varlıklarını takip edebilirsiniz."

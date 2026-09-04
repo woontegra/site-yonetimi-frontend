@@ -78,7 +78,7 @@ export function DuesDetailPage() {
   const params = useParams<{ id: string }>();
   const duesId = String(params.id);
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
 
   const [dues, setDues] = useState<DuesDefinition | null>(null);
@@ -160,7 +160,7 @@ export function DuesDetailPage() {
       const preview = await getChargePreview(auth, dues.id);
       setChargePreview(preview);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Önizleme alınamadı.", "error");
+      toastError(err, "Önizleme alınamadı.");
     }
   }
 
@@ -174,7 +174,7 @@ export function DuesDetailPage() {
       setChargePreview(null);
       await Promise.all([load(), loadDebts()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Borçlandırma başarısız.", "error");
+      toastError(err, "Borçlandırma başarısız.");
     } finally {
       setChargePending(false);
     }
@@ -189,7 +189,7 @@ export function DuesDetailPage() {
       setBulkCancelOpen(false);
       await Promise.all([load(), loadDebts()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Toplu iptal başarısız.", "error");
+      toastError(err, "Toplu iptal başarısız.");
     } finally {
       setBulkCancelPending(false);
     }

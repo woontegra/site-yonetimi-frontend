@@ -144,7 +144,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
   const { ready } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
 
@@ -567,10 +567,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
       setCollectPickerOpen(false);
       setCollectOpen(true);
     } catch (error) {
-      showToast(
-        error instanceof ApiError ? error.message : "Tahsilat formu açılamadı.",
-        "error",
-      );
+      toastError(error, "Tahsilat formu açılamadı.");
     }
   }
 
@@ -580,7 +577,12 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
     setCollectError("");
     try {
       await createPayment({ ...auth, siteId: submitSiteId }, payload, crypto.randomUUID());
-      showToast("Tahsilat kaydedildi.");
+      showToast(
+        `${Number(payload.amount).toLocaleString("tr-TR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        })} TL tahsilat kaydedildi.`,
+      );
       setCollectOpen(false);
       setCollectApartmentId("");
       setCollectBuildingId("");
@@ -626,7 +628,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
       setCancellingDebt(null);
       await Promise.all([loadDebts(), loadDashboard()]);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Borç iptal edilemedi.", "error");
+      toastError(error, "Borç iptal edilemedi.");
     } finally {
       setCancelDebtPending(false);
     }
@@ -763,28 +765,28 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
           value={formatMoney(monthlyIncome)}
           valueClassName="text-success"
           icon={TrendingUp}
-          iconClassName="bg-emerald-50 text-success"
+          tone="green"
         />
         <AccountingSummaryCard
           label="Aylık Gider"
           value={formatMoney(monthlyExpense)}
           valueClassName="text-danger"
           icon={TrendingDown}
-          iconClassName="bg-rose-50 text-danger"
+          tone="rose"
         />
         <AccountingSummaryCard
           label="Daire Borçları"
           value={formatMoney(openRemaining)}
           valueClassName="text-warning"
           icon={Wallet}
-          iconClassName="bg-amber-50 text-warning"
+          tone="amber"
         />
         <AccountingSummaryCard
           label="Borçlu Daire Sayısı"
           value={String(indebtedApartments)}
           valueClassName="text-brand"
           icon={Building2}
-          iconClassName="bg-brand-soft text-brand"
+          tone="blue"
         />
       </div>
 

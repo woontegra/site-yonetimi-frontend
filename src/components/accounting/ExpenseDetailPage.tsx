@@ -54,7 +54,7 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 export function ExpenseDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
 
   const [expense, setExpense] = useState<Expense | null>(null);
@@ -117,7 +117,7 @@ export function ExpenseDetailPage() {
       setExpenseTypes(types);
       setFormOpen(true);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Düzenleme formu açılamadı.", "error");
+      toastError(err, "Düzenleme formu açılamadı.");
     }
   }
 
@@ -169,7 +169,7 @@ export function ExpenseDetailPage() {
       setCancelOpen(false);
       showToast("Gider iptal edildi.");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Gider iptal edilemedi.", "error");
+      toastError(err, "Gider iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }

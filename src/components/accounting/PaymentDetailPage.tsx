@@ -32,7 +32,7 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 export function PaymentDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
 
   const [payment, setPayment] = useState<Payment | null>(null);
@@ -66,7 +66,7 @@ export function PaymentDetailPage() {
       setCancelOpen(false);
       showToast("Tahsilat iptal edildi.");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Tahsilat iptal edilemedi.", "error");
+      toastError(err, "Tahsilat iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }

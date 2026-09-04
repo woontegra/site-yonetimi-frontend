@@ -21,6 +21,9 @@ export type PdfParseProgress =
 export type PdfParseOptions = {
   password?: string;
   onProgress?: (phase: PdfParseProgress, detail?: string) => void;
+  signal?: AbortSignal;
+  /** Default 45s for small text PDFs. */
+  timeoutMs?: number;
 };
 
 export class PdfStatementError extends Error {
@@ -30,7 +33,11 @@ export class PdfStatementError extends Error {
     | "SCANNED"
     | "NO_TRANSACTIONS"
     | "TOO_MANY_PAGES"
-    | "PASSWORD_REQUIRED";
+    | "PASSWORD_REQUIRED"
+    | "TIMEOUT"
+    | "ABORTED"
+    | "WORKER_FAILED"
+    | "PARSE_FAILED";
 
   constructor(
     code: PdfStatementError["code"],
@@ -44,6 +51,7 @@ export class PdfStatementError extends Error {
 
 const MAX_PDF_PAGES = 100;
 const MIN_TEXT_CHARS_PER_PAGE = 40;
+const DEFAULT_PDF_TIMEOUT_MS = 45_000;
 
 function emptyMapping(): ColumnMapping {
   return {
@@ -59,10 +67,66 @@ function emptyMapping(): ColumnMapping {
   };
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw new PdfStatementError("ABORTED", "İşlem iptal edildi.");
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, signal?: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new PdfStatementError("ABORTED", "İşlem iptal edildi."));
+      return;
+    }
+    const timer = setTimeout(() => {
+      reject(
+        new PdfStatementError(
+          "TIMEOUT",
+          "PDF beklenen sürede işlenemedi. Dosyayı yeniden deneyin veya farklı formatta yükleyin.",
+        ),
+      );
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new PdfStatementError("ABORTED", "İşlem iptal edildi."));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function loadPdfJs() {
   const pdfjs = await import("pdfjs-dist");
   if (typeof window !== "undefined") {
-    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    const workerSrc = "/pdf.worker.min.mjs";
+    pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+    try {
+      const probe = await fetch(workerSrc, { method: "HEAD", cache: "force-cache" });
+      if (!probe.ok) {
+        throw new PdfStatementError(
+          "WORKER_FAILED",
+          "PDF işlenirken bir hata oluştu. Dosyayı yeniden deneyin.",
+        );
+      }
+    } catch (error) {
+      if (error instanceof PdfStatementError) throw error;
+      throw new PdfStatementError(
+        "WORKER_FAILED",
+        "PDF işlenirken bir hata oluştu. Dosyayı yeniden deneyin.",
+      );
+    }
   }
   return pdfjs;
 }
@@ -71,11 +135,14 @@ async function extractPages(
   data: Uint8Array,
   password: string | undefined,
   onProgress?: PdfParseOptions["onProgress"],
+  signal?: AbortSignal,
 ): Promise<{ pageCount: number; pages: PdfPageText[]; kind: PdfKind }> {
   onProgress?.("opening");
+  throwIfAborted(signal);
   const pdfjs = await loadPdfJs();
+  throwIfAborted(signal);
 
-  let doc;
+  let doc: { numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: unknown[] }> }>; destroy: () => Promise<void> } | null = null;
   try {
     const task = pdfjs.getDocument({
       data: data.slice(),
@@ -83,8 +150,18 @@ async function extractPages(
       useSystemFonts: true,
       isEvalSupported: false,
     });
-    doc = await task.promise;
+    const abortOpen = () => {
+      void task.destroy().catch(() => undefined);
+    };
+    signal?.addEventListener("abort", abortOpen, { once: true });
+    try {
+      doc = await task.promise;
+    } finally {
+      signal?.removeEventListener("abort", abortOpen);
+    }
   } catch (error) {
+    if (error instanceof PdfStatementError) throw error;
+    throwIfAborted(signal);
     const name = error && typeof error === "object" && "name" in error ? String((error as { name: string }).name) : "";
     const message = error instanceof Error ? error.message : "";
     if (
@@ -103,7 +180,8 @@ async function extractPages(
   }
 
   try {
-    const pageCount = doc.numPages;
+    throwIfAborted(signal);
+    const pageCount = doc!.numPages;
     if (pageCount > MAX_PDF_PAGES) {
       throw new PdfStatementError(
         "TOO_MANY_PAGES",
@@ -116,21 +194,20 @@ async function extractPages(
     let totalChars = 0;
 
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      const page = await doc.getPage(pageNumber);
+      throwIfAborted(signal);
+      const page = await doc!.getPage(pageNumber);
       const textContent = await page.getTextContent();
       const items = textContent.items as Array<{ str?: string; transform?: number[] }>;
 
-      // Group by approximate Y to rebuild lines
       const buckets = new Map<number, Array<{ x: number; text: string }>>();
       for (const item of items) {
         const text = String(item.str ?? "").replace(/\s+/g, " ").trim();
         if (!text) continue;
         const y = item.transform ? Math.round(item.transform[5] ?? 0) : 0;
         const x = item.transform ? Number(item.transform[4] ?? 0) : 0;
-        const key = y;
-        const list = buckets.get(key) ?? [];
+        const list = buckets.get(y) ?? [];
         list.push({ x, text });
-        buckets.set(key, list);
+        buckets.set(y, list);
       }
 
       const lines = [...buckets.entries()]
@@ -157,7 +234,7 @@ async function extractPages(
     }
     return { pageCount, pages, kind: "text" };
   } finally {
-    await doc.destroy().catch(() => undefined);
+    await doc?.destroy().catch(() => undefined);
   }
 }
 
@@ -177,39 +254,89 @@ export async function parseBankStatementPdf(
     multiLineMerged: number;
   };
 }> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PDF_TIMEOUT_MS;
+  return withTimeout(parseBankStatementPdfInner(file, options), timeoutMs, options.signal);
+}
+
+async function parseBankStatementPdfInner(
+  file: File,
+  options: PdfParseOptions,
+): Promise<ParseResult & {
+  sourceKind: "pdf";
+  pdfMeta: {
+    pageCount: number;
+    kind: PdfKind;
+    warnings: string[];
+    balanceChainOk: boolean | null;
+    adapterId: string;
+    adapterName: string;
+    skippedLines: number;
+    multiLineMerged: number;
+  };
+}> {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const stage = (name: string, extra?: Record<string, unknown>) => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    console.info(
+      JSON.stringify({
+        scope: "bank_statement_pdf",
+        stage: name,
+        elapsedMs: Math.round(now - startedAt),
+        fileType: "pdf",
+        fileSize: file.size,
+        ...extra,
+      }),
+    );
+  };
+
   options.onProgress?.("opening");
+  stage("file_received");
+  throwIfAborted(options.signal);
+
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
+  stage("file_validated", { byteLength: bytes.byteLength });
 
   if (!isPdfMagic(bytes)) {
     throw new PdfStatementError("INVALID", "PDF dosya imzası doğrulanamadı.");
   }
 
-  // Fast encrypted hint before worker (may still need password for open)
   if (pdfLooksEncrypted(bytes) && !options.password) {
     throw new PdfStatementError("PASSWORD_REQUIRED", "Bu PDF parola ile korunuyor.");
   }
 
-  const { pageCount, pages, kind } = await extractPages(bytes, options.password, options.onProgress);
+  const { pageCount, pages, kind } = await extractPages(
+    bytes,
+    options.password,
+    options.onProgress,
+    options.signal,
+  );
+  stage("text_extracted", { pageCount, kind });
 
   if (kind === "scanned") {
     throw new PdfStatementError(
       "SCANNED",
-      "Bu PDF taranmış görüntülerden oluşuyor. Hareketleri okuyabilmek için metin tanıma işlemi gerekiyor. Bankanızdan metin tabanlı PDF, Excel veya CSV ekstre indirebilirsiniz.",
+      "PDF’de okunabilir metin bulunamadı. Dosya taranmış olabilir.",
     );
   }
 
   options.onProgress?.("detecting_transactions");
+  throwIfAborted(options.signal);
   const extracted = extractPdfStatement(pages);
+  stage("transactions_detected", {
+    transactionCount: extracted.transactions.length,
+    skippedLines: extracted.skippedLines,
+  });
 
   if (extracted.transactions.length === 0) {
     throw new PdfStatementError(
       "NO_TRANSACTIONS",
-      "PDF metni okundu ancak hareket sütunları otomatik belirlenemedi. Ekstrede geçerli banka hareketi bulunamadı.",
+      "PDF okundu ancak banka hareketleri belirlenemedi.",
     );
   }
 
   options.onProgress?.("preparing_preview");
+  throwIfAborted(options.signal);
 
   const rows: ParsedStatementRow[] = extracted.transactions.map((tx, index) => ({
     transactionDate: tx.transactionDate,
@@ -235,6 +362,7 @@ export async function parseBankStatementPdf(
 
   const headers = ["Tarih", "Valör", "Açıklama", "Borç", "Alacak", "Bakiye", "Referans", "Sayfa"];
   const mapping = emptyMapping();
+  stage("preview_prepared", { rowCount: rows.length });
 
   return {
     sourceKind: "pdf",

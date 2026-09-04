@@ -34,7 +34,7 @@ function formsEqual(a: SiteFormValues, b: SiteFormValues): boolean {
 }
 
 export function SiteInfoSettings() {
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const { siteId, status, refreshSites } = useActiveSite();
   const auth = useApiAuth({ requireSite: true });
   const { openWizard } = useSiteSetupWizard();
@@ -65,7 +65,7 @@ export function SiteInfoSettings() {
       setBaseline(form);
       setFieldErrors({});
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Site bilgileri yüklenemedi.", "error");
+      toastError(error, "Site bilgileri yüklenemedi.");
       setSite(null);
     } finally {
       setLoading(false);
@@ -95,7 +95,7 @@ export function SiteInfoSettings() {
       await refreshSites({ preferSiteId: siteId });
       showToast("Site bilgileri güncellendi.");
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Site kaydedilemedi.", "error");
+      toastError(error, "Site kaydedilemedi.");
     } finally {
       setPending(false);
     }

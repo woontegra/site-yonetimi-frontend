@@ -64,7 +64,7 @@ export function EmployeeDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
 
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
@@ -144,7 +144,7 @@ export function EmployeeDetailPage() {
       setArchiveOpen(false);
       router.push("/app/calisanlar");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Çalışan arşivlenemedi.", "error");
+      toastError(err, "Çalışan arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }
@@ -159,7 +159,7 @@ export function EmployeeDetailPage() {
       setTerminateOpen(false);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setTerminatePending(false);
     }
@@ -194,7 +194,7 @@ export function EmployeeDetailPage() {
       setEnding(null);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Görevlendirme sonlandırılamadı.", "error");
+      toastError(err, "Görevlendirme sonlandırılamadı.");
     } finally {
       setEndPending(false);
     }

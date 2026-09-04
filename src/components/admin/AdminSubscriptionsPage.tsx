@@ -35,7 +35,7 @@ const PER_PAGE = 20;
 export function AdminSubscriptionsPage() {
   const { ready } = useAuth();
   const auth = useAdminAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -84,7 +84,7 @@ export function AdminSubscriptionsPage() {
       showToast(message);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setPending(false);
       setSuspendId(null);

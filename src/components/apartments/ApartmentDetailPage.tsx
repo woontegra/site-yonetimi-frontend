@@ -219,7 +219,7 @@ export function ApartmentDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
   const { site, siteId } = useActiveSite();
 
@@ -430,7 +430,7 @@ export function ApartmentDetailPage() {
       setOpenDebtTotal(openTotal.toFixed(2));
       setPayOpen(true);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Tahsilat formu açılamadı.", "error");
+      toastError(err, "Tahsilat formu açılamadı.");
     }
   }
 
@@ -553,7 +553,7 @@ export function ApartmentDetailPage() {
       setEnding(null);
       await loadRelations();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İlişki sonlandırılamadı.", "error");
+      toastError(err, "İlişki sonlandırılamadı.");
     } finally {
       setEndPending(false);
     }

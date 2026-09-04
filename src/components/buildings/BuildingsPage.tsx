@@ -35,7 +35,7 @@ const PER_PAGE = 20;
 
 export function BuildingsPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites, status } = useActiveSite();
   const { openWizard } = useSiteSetupWizard();
@@ -125,10 +125,10 @@ export function BuildingsPage() {
       const authForSite = { ...auth, siteId: targetSiteId };
       if (editing) {
         await updateBuilding(authForSite, editing.id, payload);
-        showToast("Bina güncellendi.");
+        showToast("Bina bilgileri güncellendi.");
       } else {
         await createBuilding(authForSite, payload);
-        showToast("Bina oluşturuldu.");
+        showToast("Bina başarıyla oluşturuldu.");
       }
       setFormOpen(false);
       setEditing(null);
@@ -149,7 +149,7 @@ export function BuildingsPage() {
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Bina silinemedi.", "error");
+      toastError(error, "Bina silinemedi.");
     } finally {
       setDeletePending(false);
     }
@@ -228,6 +228,8 @@ export function BuildingsPage() {
         cancelLabel="Vazgeç"
         danger
         pending={deletePending}
+        pendingLabel="Siliniyor…"
+        alert="Bu işlem geri alınamaz."
         onConfirm={() => void handleDelete()}
         onClose={() => (deletePending ? undefined : setDeleting(null))}
       />

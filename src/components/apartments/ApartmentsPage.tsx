@@ -46,7 +46,7 @@ const PER_PAGE = 20;
 
 export function ApartmentsPage() {
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const router = useRouter();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites, status: siteStatus } = useActiveSite();
@@ -194,7 +194,7 @@ export function ApartmentsPage() {
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Daire silinemedi.", "error");
+      toastError(error, "Daire silinemedi.");
     } finally {
       setDeletePending(false);
     }

@@ -59,7 +59,7 @@ const STATUS: Record<TenantMember["status"], { label: string; tone: BadgeTone }>
 export function TenantUsersPage() {
   const { ready, user } = useAuth();
   const auth = useApiAuth({ requireSite: false });
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const canInvite = hasPermission(user, "users.invite") || hasPermission(user, "users.manage") || !user.permissions?.length;
   const canManage = hasPermission(user, "users.manage") || !user.permissions?.length;
 
@@ -160,7 +160,7 @@ export function TenantUsersPage() {
         await load();
       }
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setSaving(false);
     }
@@ -172,7 +172,7 @@ export function TenantUsersPage() {
       showToast(success);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     }
   }
 

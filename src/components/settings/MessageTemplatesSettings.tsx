@@ -88,7 +88,7 @@ function mappingComplete(count: number, mapping: Record<string, string>): boolea
 
 export function MessageTemplatesSettings() {
   const auth = useApiAuth({ requireSite: true });
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
 
   const [channelFilter, setChannelFilter] = useState<MessageChannel | "">("");
   const [items, setItems] = useState<MessageTemplate[]>([]);
@@ -114,7 +114,7 @@ export function MessageTemplatesSettings() {
       });
       setItems(result.items.filter((item) => isUserFacingMessageChannel(item.channel)));
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Şablonlar yüklenemedi.", "error");
+      toastError(error, "Şablonlar yüklenemedi.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -279,7 +279,7 @@ export function MessageTemplatesSettings() {
       showToast(item.isActive ? "Şablon pasife alındı." : "Şablon aktifleştirildi.");
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Durum güncellenemedi.", "error");
+      toastError(error, "Durum güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -294,7 +294,7 @@ export function MessageTemplatesSettings() {
       showToast("Şablon silindi.");
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Şablon silinemedi.", "error");
+      toastError(error, "Şablon silinemedi.");
     } finally {
       setPending(false);
     }

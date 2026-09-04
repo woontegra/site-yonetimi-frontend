@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown } from "lucide-react";
 import { useActiveSite } from "@/lib/active-site-context";
+import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
 type SiteSelectorProps = {
@@ -13,6 +14,7 @@ type SiteSelectorProps = {
 
 export function SiteSelector({ compact = false, className }: SiteSelectorProps) {
   const { ready, sites, site, siteId, setSiteId, hasSites } = useActiveSite();
+  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +71,10 @@ export function SiteSelector({ compact = false, className }: SiteSelectorProps) 
                 aria-selected={selected}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-canvas"
                 onClick={() => {
-                  setSiteId(item.id);
+                  if (item.id !== siteId) {
+                    setSiteId(item.id);
+                    showToast("Aktif site değiştirildi.");
+                  }
                   setOpen(false);
                 }}
               >

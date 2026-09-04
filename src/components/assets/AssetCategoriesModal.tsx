@@ -26,7 +26,7 @@ type AssetCategoriesModalProps = {
 };
 
 export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCategoriesModalProps) {
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [items, setItems] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
@@ -43,7 +43,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
       const result = await listAssetCategories(auth, { status: "hepsi" });
       setItems(result.items);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Kategoriler yüklenemedi.", "error");
+      toastError(err, "Kategoriler yüklenemedi.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -72,7 +72,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Kategori eklenemedi.", "error");
+      toastError(err, "Kategori eklenemedi.");
     } finally {
       setPending(false);
     }
@@ -91,7 +91,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Güncellenemedi.", "error");
+      toastError(err, "Güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -106,7 +106,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Durum güncellenemedi.", "error");
+      toastError(err, "Durum güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -123,7 +123,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Silinemedi.", "error");
+      toastError(err, "Silinemedi.");
     } finally {
       setPending(false);
     }

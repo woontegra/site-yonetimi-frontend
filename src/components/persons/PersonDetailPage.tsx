@@ -63,7 +63,7 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 export function PersonDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
 
   const [person, setPerson] = useState<Person | null>(null);
@@ -226,7 +226,7 @@ export function PersonDetailPage() {
       setEnding(null);
       await loadRelations();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İlişki sonlandırılamadı.", "error");
+      toastError(err, "İlişki sonlandırılamadı.");
     } finally {
       setEndPending(false);
     }

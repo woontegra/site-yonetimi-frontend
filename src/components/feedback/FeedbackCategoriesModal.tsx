@@ -31,7 +31,7 @@ export function FeedbackCategoriesModal({
   onClose,
   onChanged,
 }: FeedbackCategoriesModalProps) {
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [items, setItems] = useState<FeedbackCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
@@ -46,7 +46,7 @@ export function FeedbackCategoriesModal({
       const result = await listFeedbackCategories(auth, { status: "hepsi" });
       setItems(result.items);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Kategoriler yüklenemedi.", "error");
+      toastError(err, "Kategoriler yüklenemedi.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -70,7 +70,7 @@ export function FeedbackCategoriesModal({
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Kategori eklenemedi.", "error");
+      toastError(err, "Kategori eklenemedi.");
     } finally {
       setPending(false);
     }
@@ -86,7 +86,7 @@ export function FeedbackCategoriesModal({
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Güncellenemedi.", "error");
+      toastError(err, "Güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -101,7 +101,7 @@ export function FeedbackCategoriesModal({
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Durum güncellenemedi.", "error");
+      toastError(err, "Durum güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -118,7 +118,7 @@ export function FeedbackCategoriesModal({
       await load();
       onChanged?.();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Silinemedi.", "error");
+      toastError(err, "Silinemedi.");
     } finally {
       setPending(false);
     }

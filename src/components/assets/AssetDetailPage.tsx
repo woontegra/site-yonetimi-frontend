@@ -128,7 +128,7 @@ export function AssetDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
   const { site, siteId } = useActiveSite();
 
@@ -301,7 +301,7 @@ export function AssetDetailPage() {
       setDeleteOpen(false);
       router.push("/app/demirbaslar");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Demirbaş silinemedi.", "error");
+      toastError(err, "Demirbaş silinemedi.");
     } finally {
       setDeletePending(false);
     }
@@ -316,7 +316,7 @@ export function AssetDetailPage() {
       setArchiveOpen(false);
       router.push("/app/demirbaslar");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Demirbaş arşivlenemedi.", "error");
+      toastError(err, "Demirbaş arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }
@@ -331,7 +331,7 @@ export function AssetDetailPage() {
       setDisposeOpen(false);
       await Promise.all([load(), tab === "hareketler" ? loadMovements() : Promise.resolve()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Demirbaş elden çıkarılamadı.", "error");
+      toastError(err, "Demirbaş elden çıkarılamadı.");
     } finally {
       setDisposePending(false);
     }
@@ -369,7 +369,7 @@ export function AssetDetailPage() {
       setDeletingMaintenance(null);
       await Promise.all([loadMaintenances(), load()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Bakım kaydı silinemedi.", "error");
+      toastError(err, "Bakım kaydı silinemedi.");
     } finally {
       setDeleteMaintenancePending(false);
     }

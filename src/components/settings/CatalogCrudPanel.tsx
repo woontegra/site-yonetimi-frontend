@@ -60,7 +60,7 @@ export function CatalogCrudPanel<T extends CatalogItem>({
   remove,
   toasts,
 }: CatalogCrudPanelProps<T>) {
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,7 +81,7 @@ export function CatalogCrudPanel<T extends CatalogItem>({
     try {
       setItems(await list(auth));
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Liste yüklenemedi.", "error");
+      toastError(error, "Liste yüklenemedi.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -102,7 +102,7 @@ export function CatalogCrudPanel<T extends CatalogItem>({
       showToast(toasts.created);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kayıt oluşturulamadı.", "error");
+      toastError(error, "Kayıt oluşturulamadı.");
     } finally {
       setPending(false);
     }
@@ -126,7 +126,7 @@ export function CatalogCrudPanel<T extends CatalogItem>({
       showToast(toasts.updated);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Güncellenemedi.", "error");
+      toastError(error, "Güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -140,7 +140,7 @@ export function CatalogCrudPanel<T extends CatalogItem>({
       showToast(item.isActive ? toasts.deactivated : toasts.activated);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Durum güncellenemedi.", "error");
+      toastError(error, "Durum güncellenemedi.");
     } finally {
       setPending(false);
     }
@@ -158,7 +158,7 @@ export function CatalogCrudPanel<T extends CatalogItem>({
       );
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Silinemedi.", "error");
+      toastError(error, "Silinemedi.");
     } finally {
       setPending(false);
     }

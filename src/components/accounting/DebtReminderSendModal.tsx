@@ -59,7 +59,7 @@ function recipientKey(row: Pick<DebtReminderRecipient, "personId" | "apartmentId
 
 export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalProps) {
   const auth = useApiAuth({ requireSite: true });
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   useCloseFormOnSiteChange(open, onClose);
 
   const [step, setStep] = useState<Step>(
@@ -119,7 +119,7 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
         setIntegrations(status);
         setBuildings(buildingResult.items);
       } catch (err) {
-        showToast(err instanceof ApiError ? err.message : "Entegrasyon durumu alınamadı.", "error");
+        toastError(err, "Entegrasyon durumu alınamadı.");
       }
     })();
   }, [open, auth, resetState, showToast]);

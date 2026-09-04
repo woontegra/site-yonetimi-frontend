@@ -42,7 +42,7 @@ function statusTone(
 
 export default function WhatsAppSablonlariPage() {
   const auth = useApiAuth({ requireSite: true });
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
 
   const [tab, setTab] = useState<TabId>("library");
   const [library, setLibrary] = useState<WhatsAppLibraryItem[]>([]);
@@ -64,7 +64,7 @@ export default function WhatsAppSablonlariPage() {
       const result = await listWhatsAppTemplateLibrary(auth);
       setLibrary(result.items);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kütüphane yüklenemedi.", "error");
+      toastError(error, "Kütüphane yüklenemedi.");
       setLibrary([]);
     } finally {
       setLoadingLibrary(false);
@@ -81,7 +81,7 @@ export default function WhatsAppSablonlariPage() {
       const result = await listMyWhatsAppTemplates(auth);
       setMine(result.items.filter((item) => !item.name.toLowerCase().startsWith("mk_")));
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Şablonlar yüklenemedi.", "error");
+      toastError(error, "Şablonlar yüklenemedi.");
       setMine([]);
     } finally {
       setLoadingMine(false);
@@ -158,7 +158,7 @@ export default function WhatsAppSablonlariPage() {
       showToast("Taslak silindi.");
       await loadMine();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Silinemedi.", "error");
+      toastError(error, "Silinemedi.");
     } finally {
       setPending(false);
     }
@@ -172,7 +172,7 @@ export default function WhatsAppSablonlariPage() {
       showToast(result.message);
       await loadMine();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Gönderilemedi.", "error");
+      toastError(error, "Gönderilemedi.");
     } finally {
       setPending(false);
     }
@@ -187,7 +187,7 @@ export default function WhatsAppSablonlariPage() {
       await loadMine();
       openEditor(result.item, false);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kopyalanamadı.", "error");
+      toastError(error, "Kopyalanamadı.");
     } finally {
       setPending(false);
     }

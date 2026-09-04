@@ -64,7 +64,7 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 export function DebtDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
 
   const [debt, setDebt] = useState<ApartmentDebt | null>(null);
@@ -143,7 +143,7 @@ export function DebtDetailPage() {
       );
       setPayOpen(true);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Ödeme formu açılamadı.", "error");
+      toastError(err, "Ödeme formu açılamadı.");
     }
   }
 
@@ -180,7 +180,7 @@ export function DebtDetailPage() {
       setCancelOpen(false);
       showToast("Borç iptal edildi.");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Borç iptal edilemedi.", "error");
+      toastError(err, "Borç iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }

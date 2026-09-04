@@ -127,7 +127,7 @@ function statusTone(status: VisitStatus) {
 
 export function VisitorsPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, hasSites } = useActiveSite();
 
@@ -288,7 +288,7 @@ export function VisitorsPage() {
       setEditingVisitor(result.visitor);
       setVisitorFormOpen(true);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Misafir yüklenemedi.", "error");
+      toastError(error, "Misafir yüklenemedi.");
     }
   }
 
@@ -352,7 +352,7 @@ export function VisitorsPage() {
       setCheckingOut(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Çıkış yapılamadı.", "error");
+      toastError(error, "Çıkış yapılamadı.");
     } finally {
       setCheckOutPending(false);
     }
@@ -367,7 +367,7 @@ export function VisitorsPage() {
       setCancelling(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Ziyaret iptal edilemedi.", "error");
+      toastError(error, "Ziyaret iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }
@@ -382,7 +382,7 @@ export function VisitorsPage() {
       setArchiving(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Misafir arşivlenemedi.", "error");
+      toastError(error, "Misafir arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

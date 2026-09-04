@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Upload } from "lucide-react";
+import { ArrowLeft, MoreHorizontal, Plus, Upload } from "lucide-react";
 import {
   BankAccountFormModal,
   bankAccountFormToPayload,
   emptyBankAccountForm,
   type BankAccountFormValues,
 } from "@/components/accounting/BankAccountFormModal";
+import { BankBulkProcessModal } from "@/components/accounting/BankBulkProcessModal";
+import { BankDebitClassifyModal } from "@/components/accounting/BankDebitClassifyModal";
 import {
   BankMatchingRuleFormModal,
   bankMatchingRuleFormToPayload,
@@ -23,6 +25,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { NeedSiteDialog } from "@/components/sites/NeedSiteDialog";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
@@ -34,6 +37,8 @@ import { listApartments, type Apartment } from "@/lib/apartments-api";
 import { useAuth } from "@/lib/auth-context";
 import { useActiveSite, useApiAuth } from "@/lib/active-site-context";
 import {
+  classifyBankDebit,
+  confirmBankTransactionMatch,
   createBankAccount,
   createBankMatchingRule,
   deleteBankMatchingRule,
@@ -44,9 +49,11 @@ import {
   listBankTransactions,
   matchBankTransaction,
   processBankTransaction,
+  processBankTransactionAuto,
   unmatchBankTransaction,
   updateBankMatchingRule,
   type BankAccount,
+  type BankDebitClass,
   type BankDirection,
   type BankHubSummary,
   type BankMatchPayload,
@@ -60,6 +67,7 @@ import { cn } from "@/lib/cn";
 import { listApartmentDebts, type ApartmentDebt } from "@/lib/debts-api";
 import { ApiError } from "@/lib/http";
 import {
+  BANK_DEBIT_CLASS_LABELS,
   BANK_DIRECTION_LABELS,
   BANK_MATCH_STATUS_LABELS,
   formatDateTr,
@@ -72,15 +80,43 @@ import { listRelations } from "@/lib/relations-api";
 type HubTab = "hareketler" | "ekstre" | "kurallar" | "hesaplar";
 
 function confidenceLabel(status: BankMatchStatus): string {
-  if (status === "SUGGESTED") return "Orta/Yüksek";
-  if (status === "MATCHED") return "Manuel";
+  if (status === "SUGGESTED") return "Öneri";
+  if (status === "MATCHED") return "Onaylı";
   if (status === "PROCESSED") return "—";
   return "—";
 }
 
+function primaryRowAction(tx: BankTransaction): "match" | "review" | "process" | "payment" | "classify" | "expense" | null {
+  if (tx.status === "IGNORED") return null;
+  if (tx.direction === "DEBIT") {
+    if (tx.expense) return "expense";
+    if (tx.debitClass === "EXCLUDED") return null;
+    return "classify";
+  }
+  if (tx.matchStatus === "PROCESSED" && tx.payment) return "payment";
+  if (tx.matchStatus === "UNMATCHED") return "match";
+  if (tx.matchStatus === "SUGGESTED" && !tx.payment) return "review";
+  if (tx.matchStatus === "MATCHED" && !tx.payment) return "process";
+  return null;
+}
+
+function statusLabel(tx: BankTransaction): string {
+  if (tx.direction === "DEBIT") {
+    if (tx.status === "IGNORED" || tx.debitClass === "EXCLUDED") {
+      return `${BANK_DEBIT_CLASS_LABELS.EXCLUDED} · Giden`;
+    }
+    if (tx.debitClass === "EXPENSE" || tx.expense) {
+      return `${BANK_DEBIT_CLASS_LABELS.EXPENSE} · Giden`;
+    }
+    return `${BANK_DEBIT_CLASS_LABELS.UNCLASSIFIED} · Giden`;
+  }
+  if (tx.status === "IGNORED") return "Hariç Tutuldu";
+  return BANK_MATCH_STATUS_LABELS[tx.matchStatus];
+}
+
 export function BankAccountsPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, hasSites } = useActiveSite();
 
@@ -97,6 +133,8 @@ export function BankAccountsPage() {
   const debouncedSearch = useDebouncedValue(search, 300);
   const [direction, setDirection] = useState("");
   const [matchStatus, setMatchStatus] = useState("");
+  const [debitClass, setDebitClass] = useState("");
+  const [classifyingTx, setClassifyingTx] = useState<BankTransaction | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
@@ -126,6 +164,49 @@ export function BankAccountsPage() {
   const [deleteRulePending, setDeleteRulePending] = useState(false);
   const [ignoringTx, setIgnoringTx] = useState<BankTransaction | null>(null);
   const [ignorePending, setIgnorePending] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [rowActionPending, setRowActionPending] = useState<string | null>(null);
+  const [pendingFocus, setPendingFocus] = useState(false);
+
+  const pendingSelectable = useMemo(
+    () =>
+      transactions.filter(
+        (tx) =>
+          tx.direction === "CREDIT" &&
+          tx.status === "ACTIVE" &&
+          !tx.payment &&
+          (tx.matchStatus === "SUGGESTED" || tx.matchStatus === "MATCHED"),
+      ),
+    [transactions],
+  );
+
+  const selectedPendingIds = useMemo(
+    () => selectedIds.filter((id) => pendingSelectable.some((tx) => tx.id === id)),
+    [selectedIds, pendingSelectable],
+  );
+
+  function filterPendingMatches() {
+    setTab("hareketler");
+    setDirection("CREDIT");
+    setMatchStatus("");
+    setPendingFocus(true);
+    setSelectedIds([]);
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function toggleSelectAllPending() {
+    if (selectedPendingIds.length === pendingSelectable.length) {
+      setSelectedIds((prev) => prev.filter((id) => !pendingSelectable.some((tx) => tx.id === id)));
+    } else {
+      setSelectedIds((prev) => [
+        ...new Set([...prev, ...pendingSelectable.map((tx) => tx.id)]),
+      ]);
+    }
+  }
 
   const loadSummaryAndAccounts = useCallback(async () => {
     if (!auth) return;
@@ -150,23 +231,40 @@ export function BankAccountsPage() {
         direction:
           direction === "CREDIT" || direction === "DEBIT" ? (direction as BankDirection) : undefined,
         matchStatus:
-          matchStatus === "UNMATCHED" ||
-          matchStatus === "SUGGESTED" ||
-          matchStatus === "MATCHED" ||
-          matchStatus === "PROCESSED"
+          !pendingFocus &&
+          direction !== "DEBIT" &&
+          (matchStatus === "UNMATCHED" ||
+            matchStatus === "SUGGESTED" ||
+            matchStatus === "MATCHED" ||
+            matchStatus === "PROCESSED")
             ? (matchStatus as BankMatchStatus)
+            : undefined,
+        debitClass:
+          !pendingFocus &&
+          (debitClass === "UNCLASSIFIED" ||
+            debitClass === "EXPENSE" ||
+            debitClass === "EXCLUDED")
+            ? (debitClass as BankDebitClass)
             : undefined,
         status: "ACTIVE",
         perPage: 100,
       });
-      setTransactions(result.items);
+      const items = pendingFocus
+        ? result.items.filter(
+            (tx) =>
+              tx.direction === "CREDIT" &&
+              !tx.payment &&
+              (tx.matchStatus === "SUGGESTED" || tx.matchStatus === "MATCHED"),
+          )
+        : result.items;
+      setTransactions(items);
     } catch (error) {
       setTransactions([]);
       setListError(error instanceof ApiError ? error.message : "Hareketler yüklenemedi.");
     } finally {
       setLoading(false);
     }
-  }, [auth, debouncedSearch, direction, matchStatus]);
+  }, [auth, debouncedSearch, direction, matchStatus, debitClass, pendingFocus]);
 
   const loadRules = useCallback(async () => {
     if (!auth) return;
@@ -276,7 +374,15 @@ export function BankAccountsPage() {
     setMatchError("");
     try {
       await matchBankTransaction(auth, matchingTx.id, payload);
-      showToast("Eşleştirme kaydedildi.");
+      const apt = matchApartments.find((a) => a.id === payload.apartmentId);
+      const person =
+        matchRelated.find((p) => p.id === payload.personId)?.fullName ??
+        persons.find((p) => p.id === payload.personId)?.fullName;
+      showToast(
+        apt
+          ? `Hareket Daire ${apt.number}${person ? ` — ${person}` : ""} ile eşleştirildi.`
+          : "Eşleştirme kaydedildi.",
+      );
       setMatchOpen(false);
       await refreshAll();
     } catch (error) {
@@ -303,14 +409,45 @@ export function BankAccountsPage() {
     }
   }
 
+  async function handleConfirmSuggestion(tx: BankTransaction) {
+    if (!auth || rowActionPending) return;
+    setRowActionPending(tx.id);
+    try {
+      await confirmBankTransactionMatch(auth, tx.id);
+      showToast("Eşleşme onaylandı. Tahsilata aktarmaya hazır.");
+      await refreshAll();
+    } catch (error) {
+      toastError(error, "Eşleşme onaylanamadı.");
+    } finally {
+      setRowActionPending(null);
+    }
+  }
+
+  async function handleProcessAuto(tx: BankTransaction) {
+    if (!auth || rowActionPending) return;
+    setRowActionPending(tx.id);
+    try {
+      if (tx.matchStatus === "SUGGESTED") {
+        await confirmBankTransactionMatch(auth, tx.id);
+      }
+      await processBankTransactionAuto(auth, tx.id);
+      showToast("Banka hareketi tahsilata aktarıldı ve daire borçlarına işlendi.");
+      await refreshAll();
+    } catch (error) {
+      toastError(error, "Tahsilata aktarılamadı.");
+    } finally {
+      setRowActionPending(null);
+    }
+  }
+
   async function handleUnmatch(tx: BankTransaction) {
     if (!auth) return;
     try {
       await unmatchBankTransaction(auth, tx.id);
-      showToast("Eşleştirme geri alındı.");
+      showToast("Eşleşme kaldırıldı.");
       await refreshAll();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Geri alma başarısız.");
+      toastError(error, "Eşleşme kaldırılamadı.");
     }
   }
 
@@ -319,11 +456,11 @@ export function BankAccountsPage() {
     setIgnorePending(true);
     try {
       await ignoreBankTransaction(auth, ignoringTx.id);
-      showToast("Hareket iptal edildi.");
+      showToast("Hareket hariç tutuldu.");
       setIgnoringTx(null);
       await refreshAll();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "İşlem başarısız.");
+      toastError(error, "İşlem başarısız.");
     } finally {
       setIgnorePending(false);
     }
@@ -340,7 +477,7 @@ export function BankAccountsPage() {
         showToast("Kural güncellendi.");
       } else {
         await createBankMatchingRule(auth, payload);
-        showToast("Kural eklendi.");
+        showToast("Eşleştirme kuralı kaydedildi.");
       }
       setRuleFormOpen(false);
       await loadRules();
@@ -407,13 +544,46 @@ export function BankAccountsPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Banka hesapları" value={String(summary?.accounts ?? "—")} />
-        <StatCard label="Onay bekleyen hareketler" value={String(summary?.pendingMatch ?? "—")} />
-        <StatCard label="Eşleşmeyen hareketler" value={String(summary?.unmatched ?? "—")} />
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        <StatCard tone="cyan" label="Banka hesapları" value={String(summary?.accounts ?? "—")} />
         <StatCard
-          label="Bu ay tahsilata aktarılan"
-          value={String(summary?.processedThisMonth ?? "—")}
+          tone="amber"
+          label="Tahsilat onayı bekleyen"
+          value={String(summary?.pendingMatch ?? "—")}
+          hint="Eşleşmiş gelen hareketler; tahsilat onayı bekliyor."
+          onClick={filterPendingMatches}
+        />
+        <StatCard
+          tone="rose"
+          label="Eşleşmeyen gelen"
+          value={String(summary?.unmatchedCredit ?? summary?.unmatched ?? "—")}
+          hint="Daire eşleşmesi olmayan gelen hareketler."
+          onClick={() => {
+            setTab("hareketler");
+            setPendingFocus(false);
+            setDirection("CREDIT");
+            setMatchStatus("UNMATCHED");
+            setDebitClass("");
+          }}
+        />
+        <StatCard
+          tone="violet"
+          label="Sınıflandırılmamış giden"
+          value={String(summary?.unclassifiedDebit ?? "—")}
+          hint="Gider/transfer kararı verilmemiş çıkışlar."
+          onClick={() => {
+            setTab("hareketler");
+            setPendingFocus(false);
+            setDirection("DEBIT");
+            setMatchStatus("");
+            setDebitClass("UNCLASSIFIED");
+          }}
+        />
+        <StatCard
+          tone="green"
+          label="Bu ay tahsilata / gider"
+          value={`${summary?.processedThisMonth ?? "—"} / ${summary?.expensesThisMonth ?? "—"}`}
+          hint="Tahsilata aktarılan gelen · giderleştirilen giden."
         />
       </div>
 
@@ -499,29 +669,94 @@ export function BankAccountsPage() {
               placeholder="Açıklama veya referans ara…"
               className="min-w-[220px] flex-1"
             />
-            <Select value={direction} onChange={(e) => setDirection(e.target.value)} className="w-36">
-              <option value="">Yön</option>
+            <Select
+              value={direction}
+              onChange={(e) => {
+                setPendingFocus(false);
+                setDirection(e.target.value);
+                setMatchStatus("");
+                setDebitClass("");
+              }}
+              className="w-36"
+            >
+              <option value="">Tümü</option>
               <option value="CREDIT">Gelen</option>
               <option value="DEBIT">Giden</option>
             </Select>
-            <Select
-              value={matchStatus}
-              onChange={(e) => setMatchStatus(e.target.value)}
-              className="w-44"
-            >
-              <option value="">Durum</option>
-              <option value="UNMATCHED">Eşleşmedi</option>
-              <option value="SUGGESTED">Otomatik Eşleşti</option>
-              <option value="MATCHED">Manuel Eşleşti</option>
-              <option value="PROCESSED">Tahsilata Aktarıldı</option>
-            </Select>
+            {direction !== "DEBIT" ? (
+              <Select
+                value={matchStatus}
+                onChange={(e) => {
+                  setPendingFocus(false);
+                  setMatchStatus(e.target.value);
+                }}
+                className="w-56"
+              >
+                <option value="">Durum (gelen)</option>
+                <option value="UNMATCHED">Eşleşmedi</option>
+                <option value="SUGGESTED">Öneri bulundu / onay bekliyor</option>
+                <option value="MATCHED">Eşleşme onaylandı</option>
+                <option value="PROCESSED">Tahsilata aktarıldı</option>
+              </Select>
+            ) : (
+              <Select
+                value={debitClass}
+                onChange={(e) => {
+                  setPendingFocus(false);
+                  setDebitClass(e.target.value);
+                }}
+                className="w-56"
+              >
+                <option value="">Durum (giden)</option>
+                <option value="UNCLASSIFIED">Sınıflandırılmadı</option>
+                <option value="EXPENSE">Giderle eşleşti</option>
+                <option value="EXCLUDED">Hariç tutuldu</option>
+              </Select>
+            )}
           </div>
+
+          {pendingSelectable.length > 0 ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--tone-amber-border)] bg-[color:var(--tone-amber-bg)] px-3 py-2">
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={
+                    pendingSelectable.length > 0 &&
+                    selectedPendingIds.length === pendingSelectable.length
+                  }
+                  onChange={toggleSelectAllPending}
+                />
+                {pendingSelectable.length} onay bekleyen seç
+              </label>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={selectedPendingIds.length === 0}
+                onClick={() => {
+                  const first = transactions.find((t) => t.id === selectedPendingIds[0]);
+                  if (first) void openMatch(first);
+                }}
+              >
+                {selectedPendingIds.length || pendingSelectable.length} Eşleşmeyi Kontrol Et
+              </Button>
+              <Button
+                size="sm"
+                disabled={selectedPendingIds.length === 0}
+                onClick={() => setBulkOpen(true)}
+              >
+                {selectedPendingIds.length} Hareketi Tahsilata Aktar
+              </Button>
+            </div>
+          ) : null}
 
           <SurfaceCard padding="none" className="overflow-hidden">
             <Table>
               <TableElement>
                 <THead>
                   <TR className="hover:bg-transparent">
+                    <TH className="w-10">
+                      <span className="sr-only">Seç</span>
+                    </TH>
                     <TH>İşlem tarihi</TH>
                     <TH>Banka hesabı</TH>
                     <TH>Açıklama</TH>
@@ -537,7 +772,7 @@ export function BankAccountsPage() {
                   {loading
                     ? Array.from({ length: 4 }).map((_, index) => (
                         <TR key={`s-${index}`} className="hover:bg-transparent">
-                          <TD colSpan={9}>
+                          <TD colSpan={10}>
                             <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
                           </TD>
                         </TR>
@@ -545,14 +780,30 @@ export function BankAccountsPage() {
                     : null}
                   {!loading && transactions.length === 0 ? (
                     <TR className="hover:bg-transparent">
-                      <TD colSpan={9} className="py-8 text-center text-sm text-muted">
+                      <TD colSpan={10} className="py-8 text-center text-sm text-muted">
                         Henüz banka hareketi yok. Ekstre içe aktararak başlayın.
                       </TD>
                     </TR>
                   ) : null}
                   {!loading
-                    ? transactions.map((tx) => (
+                    ? transactions.map((tx) => {
+                        const action = primaryRowAction(tx);
+                        const pendingRow =
+                          tx.direction === "CREDIT" &&
+                          !tx.payment &&
+                          (tx.matchStatus === "SUGGESTED" || tx.matchStatus === "MATCHED");
+                        return (
                         <TR key={tx.id}>
+                          <TD>
+                            {pendingRow ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.includes(tx.id)}
+                                onChange={() => toggleSelect(tx.id)}
+                                aria-label="Hareketi seç"
+                              />
+                            ) : null}
+                          </TD>
                           <TD className="whitespace-nowrap text-sm">
                             {formatDateTr(tx.transactionDate)}
                           </TD>
@@ -583,55 +834,149 @@ export function BankAccountsPage() {
                           </TD>
                           <TD className="text-sm">{confidenceLabel(tx.matchStatus)}</TD>
                           <TD className="text-sm">
-                            {tx.status === "IGNORED"
-                              ? "İptal Edildi"
-                              : BANK_MATCH_STATUS_LABELS[tx.matchStatus]}
+                            {statusLabel(tx)}
                             <span className="block text-xs text-muted">
                               {BANK_DIRECTION_LABELS[tx.direction]}
                             </span>
                           </TD>
                           <TD className="text-right">
-                            <div className="flex flex-wrap justify-end gap-1">
-                              {tx.direction === "CREDIT" &&
-                              tx.matchStatus !== "PROCESSED" &&
-                              tx.status === "ACTIVE" ? (
+                            <div className="flex flex-wrap items-center justify-end gap-1">
+                              {action === "match" ? (
                                 <Button
                                   size="sm"
                                   variant="secondary"
                                   onClick={() => void openMatch(tx)}
                                 >
-                                  Eşleştir
+                                  Daireyle Eşleştir
                                 </Button>
                               ) : null}
-                              {(tx.matchStatus === "MATCHED" || tx.matchStatus === "SUGGESTED") &&
-                              !tx.payment ? (
+                              {action === "review" ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={rowActionPending === tx.id}
+                                    onClick={() => void openMatch(tx)}
+                                  >
+                                    Kontrol Et
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    disabled={rowActionPending === tx.id}
+                                    onClick={() => void handleConfirmSuggestion(tx)}
+                                  >
+                                    Onayla
+                                  </Button>
+                                </>
+                              ) : null}
+                              {action === "process" ? (
                                 <Button
                                   size="sm"
-                                  variant="ghost"
-                                  onClick={() => void handleUnmatch(tx)}
+                                  disabled={rowActionPending === tx.id}
+                                  onClick={() => void handleProcessAuto(tx)}
                                 >
-                                  Geri Al
+                                  Tahsilata Aktar
                                 </Button>
                               ) : null}
-                              {tx.matchStatus !== "PROCESSED" && tx.status === "ACTIVE" ? (
+                              {action === "classify" ? (
                                 <Button
                                   size="sm"
-                                  variant="ghost"
-                                  onClick={() => setIgnoringTx(tx)}
+                                  variant="secondary"
+                                  onClick={() => setClassifyingTx(tx)}
                                 >
-                                  İptal
+                                  Sınıflandır
                                 </Button>
                               ) : null}
-                              <Link
-                                href={`/app/muhasebe/bankalar/${tx.bankAccount.id}`}
-                                className="inline-flex h-8 items-center px-2 text-xs text-accent hover:underline"
+                              {action === "payment" && tx.payment ? (
+                                <Link
+                                  href={`/app/muhasebe/tahsilatlar/${tx.payment.id}`}
+                                  className="inline-flex h-8 items-center px-2 text-xs font-medium text-accent hover:underline"
+                                >
+                                  Tahsilatı Gör
+                                </Link>
+                              ) : null}
+                              {action === "expense" && tx.expense ? (
+                                <Link
+                                  href={`/app/muhasebe/giderler/${tx.expense.id}`}
+                                  className="inline-flex h-8 items-center px-2 text-xs font-medium text-accent hover:underline"
+                                >
+                                  Gideri Gör
+                                </Link>
+                              ) : null}
+                              <Dropdown
+                                align="right"
+                                trigger={
+                                  <Button size="sm" variant="ghost" aria-label="Diğer işlemler">
+                                    <MoreHorizontal className="size-4" />
+                                  </Button>
+                                }
                               >
-                                Hesap
-                              </Link>
+                                {tx.direction === "CREDIT" &&
+                                tx.matchStatus !== "PROCESSED" &&
+                                tx.status === "ACTIVE" ? (
+                                  <DropdownItem onClick={() => void openMatch(tx)}>
+                                    Eşleşmeyi Değiştir
+                                  </DropdownItem>
+                                ) : null}
+                                {tx.direction === "CREDIT" &&
+                                (tx.matchStatus === "MATCHED" || tx.matchStatus === "SUGGESTED") &&
+                                !tx.payment ? (
+                                  <DropdownItem onClick={() => void handleUnmatch(tx)}>
+                                    Tahsilat Eşleşmesini Geri Al
+                                  </DropdownItem>
+                                ) : null}
+                                {tx.direction === "DEBIT" &&
+                                tx.debitClass &&
+                                tx.debitClass !== "UNCLASSIFIED" &&
+                                !tx.expense ? (
+                                  <DropdownItem
+                                    onClick={() =>
+                                      void (async () => {
+                                        if (!auth) return;
+                                        try {
+                                          await classifyBankDebit(auth, tx.id, { action: "RESET" });
+                                          showToast("Sınıflandırma geri alındı.");
+                                          await refreshAll();
+                                        } catch (error) {
+                                          toastError(error, "Sınıflandırma geri alınamadı.");
+                                        }
+                                      })()
+                                    }
+                                  >
+                                    Sınıflandırmayı Geri Al
+                                  </DropdownItem>
+                                ) : null}
+                                {tx.direction === "DEBIT" && !tx.expense ? (
+                                  <DropdownItem onClick={() => setClassifyingTx(tx)}>
+                                    Sınıflandır
+                                  </DropdownItem>
+                                ) : null}
+                                {tx.matchStatus !== "PROCESSED" &&
+                                !tx.expense &&
+                                tx.status === "ACTIVE" ? (
+                                  <DropdownItem danger onClick={() => setIgnoringTx(tx)}>
+                                    Banka Hareketini Hariç Tut
+                                  </DropdownItem>
+                                ) : null}
+                                <DropdownItem href={`/app/muhasebe/bankalar/${tx.bankAccount.id}`}>
+                                  Hesap Detayını Gör
+                                </DropdownItem>
+                                {tx.payment ? (
+                                  <DropdownItem href={`/app/muhasebe/tahsilatlar/${tx.payment.id}`}>
+                                    Dağıtımı Gör
+                                  </DropdownItem>
+                                ) : null}
+                                {tx.expense ? (
+                                  <DropdownItem href={`/app/muhasebe/giderler/${tx.expense.id}`}>
+                                    Gider Kaydını Gör
+                                  </DropdownItem>
+                                ) : null}
+                              </Dropdown>
                             </div>
                           </TD>
                         </TR>
-                      ))
+                        );
+                      })
                     : null}
                 </TBody>
               </TableElement>
@@ -785,12 +1130,62 @@ export function BankAccountsPage() {
           onAccountsChanged={async () => {
             await loadSummaryAndAccounts();
           }}
-          onDone={() => {
-            showToast("Ekstre aktarıldı.");
+          onDone={(result) => {
+            if (result) {
+              const awaiting = result.matchedWithoutPayment ?? 0;
+              const title =
+                result.processedPayments > 0
+                  ? `${result.createdCount} banka hareketi içe aktarıldı. ${result.processedPayments} hareket tahsilata aktarıldı.`
+                  : `${result.createdCount} banka hareketi içe aktarıldı.${
+                      awaiting > 0
+                        ? ` ${awaiting} eşleşme tahsilata aktarılmayı bekliyor.`
+                        : ""
+                    }`;
+              showToast({
+                title,
+                tone: "success",
+                action:
+                  awaiting > 0 || result.processedPayments === 0
+                    ? {
+                        label: "Tahsilatları Kontrol Et",
+                        onClick: () => filterPendingMatches(),
+                      }
+                    : undefined,
+              });
+            } else {
+              showToast("Ekstre başarıyla aktarıldı.");
+            }
             void refreshAll();
           }}
         />
       ) : null}
+
+      <BankBulkProcessModal
+        open={bulkOpen}
+        auth={auth}
+        ids={selectedPendingIds}
+        onClose={() => setBulkOpen(false)}
+        onDone={(summary) => {
+          setSelectedIds([]);
+          if (summary.processed > 0 && summary.skipped === 0 && summary.failed === 0) {
+            showToast(
+              `${summary.processed} banka hareketi tahsilata aktarıldı ve daire borçlarına işlendi.`,
+            );
+          } else if (summary.processed > 0) {
+            showToast({
+              title: `${summary.processed} hareket tahsilata aktarıldı. ${summary.skipped + summary.failed} hareket kontrol edilmek üzere bekletildi.`,
+              tone: "warning",
+            });
+          } else {
+            showToast({
+              title: "Hiçbir hareket tahsilata aktarılmadı.",
+              description: "Riskli veya engellenen eşleşmeleri tek tek kontrol edin.",
+              tone: "warning",
+            });
+          }
+          void refreshAll();
+        }}
+      />
 
       <BankMatchModal
         open={matchOpen}
@@ -851,18 +1246,29 @@ export function BankAccountsPage() {
             setDeletingRule(null);
             await loadRules();
           } catch (error) {
-            showToast(error instanceof ApiError ? error.message : "Silinemedi.");
+            toastError(error, "Silinemedi.");
           } finally {
             setDeleteRulePending(false);
           }
         }}
       />
 
+      <BankDebitClassifyModal
+        open={Boolean(classifyingTx)}
+        auth={auth}
+        transaction={classifyingTx}
+        onClose={() => setClassifyingTx(null)}
+        onDone={(message) => {
+          showToast(message);
+          void refreshAll();
+        }}
+      />
+
       <ConfirmDialog
         open={Boolean(ignoringTx)}
-        title="Hareketi iptal et"
-        description="Hareket yoksayılacak (İptal Edildi). Tahsilata aktarılmış hareketler iptal edilemez."
-        confirmLabel="İptal Et"
+        title="Banka hareketini hariç tut"
+        description="Hareket listede hariç tutulmuş olarak kalır; bankada gerçekleşen işlem silinmez. Tahsilat veya gider bağlı hareketler hariç tutulamaz."
+        confirmLabel="Hariç Tut"
         pending={ignorePending}
         onClose={() => setIgnoringTx(null)}
         onConfirm={() => void handleIgnore()}

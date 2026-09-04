@@ -123,7 +123,7 @@ export function AdminTenantDetailPage() {
   const router = useRouter();
   const { ready, tenantId: sessionTenantId } = useAuth();
   const auth = useAdminAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [tab, setTab] = useState<Tab>("genel");
   const [tenant, setTenant] = useState<AdminTenantDetail | null>(null);
   const [sites, setSites] = useState<TenantSiteRow[]>([]);
@@ -179,7 +179,7 @@ export function AdminTenantDetailPage() {
       setQuickModal(null);
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
     } finally {
       setPending(false);
       setConfirm(null);
@@ -731,7 +731,7 @@ export function AdminTenantDetailPage() {
                     router.push("/app/admin/tenantlar");
                     router.refresh();
                   } catch (err) {
-                    showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+                    toastError(err, "İşlem tamamlanamadı.");
                   } finally {
                     setPending(false);
                   }

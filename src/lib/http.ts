@@ -45,8 +45,11 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         ...headers,
       },
     });
-  } catch {
-    throw new ApiError(0, "Sunucuya bağlanılamadı. API ve veritabanının çalıştığını kontrol edin.");
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(0, "İşlem iptal edildi.", "ABORTED");
+    }
+    throw new ApiError(0, "Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edip yeniden deneyin.");
   }
 
   if (response.status === 204) {
@@ -77,12 +80,16 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      payload.message ?? "İşlem tamamlanamadı.",
-      payload.code,
-      payload.details,
-    );
+    const rawMessage = payload.message ?? "İşlem tamamlanamadı.";
+    const safeMessage =
+      response.status >= 500
+        ? "İşlem sırasında beklenmeyen bir hata oluştu. Lütfen yeniden deneyin."
+        : response.status === 403
+          ? "Bu işlemi yapmaya yetkiniz bulunmuyor."
+          : response.status === 401
+            ? "Oturumunuz sona erdi. Lütfen yeniden giriş yapın."
+            : rawMessage;
+    throw new ApiError(response.status, safeMessage, payload.code, payload.details);
   }
 
   return payload as T;

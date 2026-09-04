@@ -81,7 +81,7 @@ function publishDate(item: Announcement) {
 export function AnnouncementsPage() {
   const router = useRouter();
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
   const canDelete = canManageAnnouncements(user);
@@ -162,7 +162,7 @@ export function AnnouncementsPage() {
       setEditing(result.announcement);
       setFormOpen(true);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Duyuru yüklenemedi.", "error");
+      toastError(error, "Duyuru yüklenemedi.");
     }
   }
 
@@ -208,7 +208,7 @@ export function AnnouncementsPage() {
       setArchiving(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Duyuru arşivlenemedi.", "error");
+      toastError(error, "Duyuru arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }
@@ -223,7 +223,7 @@ export function AnnouncementsPage() {
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Duyuru silinemedi.", "error");
+      toastError(error, "Duyuru silinemedi.");
     } finally {
       setDeletePending(false);
     }

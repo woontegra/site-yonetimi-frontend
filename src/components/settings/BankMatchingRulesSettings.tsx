@@ -32,7 +32,7 @@ import { ApiError } from "@/lib/http";
 import { listPersons, type PersonListItem } from "@/lib/persons-api";
 
 export function BankMatchingRulesSettings() {
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const { siteId, site, status } = useActiveSite();
   const auth = useApiAuth({ requireSite: true });
 
@@ -75,7 +75,7 @@ export function BankMatchingRulesSettings() {
       setBuildings(buildingsResult.items);
       setPersons(personsResult.items);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kurallar yüklenemedi.", "error");
+      toastError(error, "Kurallar yüklenemedi.");
       setRules([]);
     } finally {
       setLoading(false);
@@ -154,7 +154,7 @@ export function BankMatchingRulesSettings() {
       showToast(rule.isActive ? "Kural pasife alındı." : "Kural aktifleştirildi.");
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Durum güncellenemedi.", "error");
+      toastError(error, "Durum güncellenemedi.");
     }
   }
 
@@ -167,7 +167,7 @@ export function BankMatchingRulesSettings() {
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kural silinemedi.", "error");
+      toastError(error, "Kural silinemedi.");
     } finally {
       setDeletePending(false);
     }

@@ -43,9 +43,15 @@ export const EXPENSE_STATUS_LABELS = {
 
 export const BANK_MATCH_STATUS_LABELS = {
   UNMATCHED: "Eşleşmedi",
-  SUGGESTED: "Otomatik Eşleşti",
-  MATCHED: "Manuel Eşleşti",
+  SUGGESTED: "Otomatik öneri — onay bekliyor",
+  MATCHED: "Eşleşme Onaylandı",
   PROCESSED: "Tahsilata Aktarıldı",
+} as const;
+
+export const BANK_DEBIT_CLASS_LABELS = {
+  UNCLASSIFIED: "Sınıflandırılmadı",
+  EXPENSE: "Giderle Eşleşti",
+  EXCLUDED: "Hariç Tutuldu",
 } as const;
 
 export const BANK_DIRECTION_LABELS = {

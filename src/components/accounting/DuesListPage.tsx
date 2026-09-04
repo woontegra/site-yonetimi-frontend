@@ -123,7 +123,7 @@ function buildListEntries(items: DuesDefinition[]): ListEntry[] {
 
 export function DuesListPage() {
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
 
@@ -243,7 +243,7 @@ export function DuesListPage() {
         );
         showToast(
           result.createdPeriodCount > 0
-            ? `${result.createdPeriodCount} dönem ve ${result.createdDebtCount} daire borcu oluşturuldu.`
+            ? `${result.createdPeriodCount} dönem oluşturuldu ve toplam ${result.createdDebtCount} borç kaydedildi.`
             : "Borçlandırma tamamlandı.",
         );
         setFormOpen(false);
@@ -270,7 +270,7 @@ export function DuesListPage() {
       const batch = await getAssessmentBatch(auth, batchId);
       setBatchView(batch);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Toplu borçlandırma alınamadı.", "error");
+      toastError(error, "Toplu borçlandırma alınamadı.");
     }
   }
 
@@ -288,7 +288,7 @@ export function DuesListPage() {
       }
       setBatchPurge(batch);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Toplu silme önizlemesi alınamadı.", "error");
+      toastError(error, "Toplu silme önizlemesi alınamadı.");
     }
   }
 
@@ -304,7 +304,7 @@ export function DuesListPage() {
       setBatchView(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Toplu silme başarısız.", "error");
+      toastError(error, "Toplu silme başarısız.");
     } finally {
       setBatchPurgePending(false);
     }
@@ -316,7 +316,7 @@ export function DuesListPage() {
       const preview = await getChargePreview(auth, dues.id);
       setChargePreview(preview);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Önizleme alınamadı.", "error");
+      toastError(error, "Önizleme alınamadı.");
     }
   }
 
@@ -330,7 +330,7 @@ export function DuesListPage() {
       setChargePreview(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Borçlandırma başarısız.", "error");
+      toastError(error, "Borçlandırma başarısız.");
     } finally {
       setChargePending(false);
     }
@@ -341,11 +341,11 @@ export function DuesListPage() {
     setDeletePending(true);
     try {
       await deleteDuesDefinition(auth, deleting.id);
-      showToast("Aidat tanımı arşivlendi. Oluşmuş daire borçları silinmedi.");
+      showToast(`Aidat arşivlendi. Mevcut borçlar korunmaya devam ediyor.`);
       setDeleting(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Aidat arşivlenemedi.", "error");
+      toastError(error, "Aidat arşivlenemedi.");
     } finally {
       setDeletePending(false);
     }
@@ -366,7 +366,7 @@ export function DuesListPage() {
       setPurgePreview(preview);
       setPurging(dues);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Silme önizlemesi alınamadı.", "error");
+      toastError(error, "Silme önizlemesi alınamadı.");
     }
   }
 
@@ -380,7 +380,7 @@ export function DuesListPage() {
       setPurgePreview(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Silme başarısız.", "error");
+      toastError(error, "Silme başarısız.");
     } finally {
       setPurgePending(false);
     }
@@ -395,7 +395,7 @@ export function DuesListPage() {
       setCancelling(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "İptal başarısız.", "error");
+      toastError(error, "İptal başarısız.");
     } finally {
       setCancelPending(false);
     }

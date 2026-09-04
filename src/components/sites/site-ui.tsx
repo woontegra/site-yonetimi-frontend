@@ -33,14 +33,24 @@ export function setupNeedsAttention(status?: SetupStatus): boolean {
 export function EntityIcon({
   icon: Icon,
   className,
+  tone = "teal",
 }: {
   icon: LucideIcon;
   className?: string;
+  tone?: "teal" | "cyan" | "blue" | "violet" | "amber";
 }) {
+  const toneClass: Record<typeof tone, string> = {
+    teal: "bg-[color:var(--tone-teal-icon-bg)] text-[color:var(--tone-teal-icon)]",
+    cyan: "bg-[color:var(--tone-cyan-icon-bg)] text-[color:var(--tone-cyan-icon)]",
+    blue: "bg-[color:var(--tone-blue-icon-bg)] text-[color:var(--tone-blue-icon)]",
+    violet: "bg-[color:var(--tone-violet-icon-bg)] text-[color:var(--tone-violet-icon)]",
+    amber: "bg-[color:var(--tone-amber-icon-bg)] text-[color:var(--tone-amber-icon)]",
+  };
   return (
     <span
       className={cn(
-        "flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent-subtle text-accent",
+        "flex size-11 shrink-0 items-center justify-center rounded-2xl",
+        toneClass[tone],
         className,
       )}
     >

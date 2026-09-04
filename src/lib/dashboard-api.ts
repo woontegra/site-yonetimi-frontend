@@ -3,6 +3,11 @@ import type { SetupStatus } from "@/lib/site-setup-api";
 
 type AuthContext = { token: string; tenantId: string; siteId?: string | null };
 
+export type DashboardPersonSummary = {
+  id: string;
+  fullName: string;
+};
+
 export type DashboardActivity = {
   id: string;
   type: "payment" | "expense";
@@ -11,6 +16,12 @@ export type DashboardActivity = {
   amount: string;
   occurredAt: string;
   href: string;
+  apartmentId?: string | null;
+  apartmentNumber?: string | null;
+  buildingName?: string | null;
+  activeOwners?: DashboardPersonSummary[];
+  activeTenants?: DashboardPersonSummary[];
+  payerName?: string | null;
 };
 
 export type DashboardUpcoming = {
@@ -21,6 +32,11 @@ export type DashboardUpcoming = {
   date: string | null;
   amount: string | null;
   href: string;
+  apartmentId?: string | null;
+  apartmentNumber?: string | null;
+  buildingName?: string | null;
+  activeOwners?: DashboardPersonSummary[];
+  activeTenants?: DashboardPersonSummary[];
 };
 
 export type DashboardOverview = {

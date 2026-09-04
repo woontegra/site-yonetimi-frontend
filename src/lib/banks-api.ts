@@ -24,6 +24,8 @@ export type BankAccount = {
   updatedAt: string;
 };
 
+export type BankDebitClass = "UNCLASSIFIED" | "EXPENSE" | "EXCLUDED";
+
 export type BankTransaction = {
   id: string;
   transactionDate: string;
@@ -37,6 +39,7 @@ export type BankTransaction = {
   balanceAfter: string | null;
   status: BankTransactionStatus;
   matchStatus: BankMatchStatus;
+  debitClass: BankDebitClass | null;
   matchedAt: string | null;
   processedAt: string | null;
   ignoredAt: string | null;
@@ -51,6 +54,7 @@ export type BankTransaction = {
   } | null;
   matchedPerson: { id: string; fullName: string } | null;
   payment: { id: string; amount: string; status: string } | null;
+  expense: { id: string; title: string; amount: string; status: string } | null;
 };
 
 export type BankMatchingRule = {
@@ -164,6 +168,7 @@ export type BankTransactionListParams = {
   bankAccountId?: string;
   direction?: BankDirection;
   matchStatus?: BankMatchStatus;
+  debitClass?: BankDebitClass;
   status?: BankTransactionStatus;
   dateFrom?: string;
   dateTo?: string;
@@ -219,6 +224,7 @@ export function listBankTransactions(auth: AuthContext, params: BankTransactionL
   if (params.bankAccountId) query.set("bankAccountId", params.bankAccountId);
   if (params.direction) query.set("direction", params.direction);
   if (params.matchStatus) query.set("matchStatus", params.matchStatus);
+  if (params.debitClass) query.set("debitClass", params.debitClass);
   if (params.status) query.set("status", params.status);
   if (params.dateFrom) query.set("dateFrom", params.dateFrom);
   if (params.dateTo) query.set("dateTo", params.dateTo);
@@ -251,6 +257,191 @@ export function processBankTransaction(auth: AuthContext, id: string, payload: B
     ...auth,
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function processBankTransactionAuto(auth: AuthContext, id: string, personId?: string | null) {
+  return apiRequest<{ bankTransaction: BankTransaction }>(
+    `/api/bank-transactions/${id}/process-auto`,
+    {
+      ...auth,
+      method: "POST",
+      body: JSON.stringify(personId ? { personId } : {}),
+    },
+  );
+}
+
+export function confirmBankTransactionMatch(auth: AuthContext, id: string) {
+  return apiRequest<{ bankTransaction: BankTransaction }>(
+    `/api/bank-transactions/${id}/confirm-match`,
+    {
+      ...auth,
+      method: "POST",
+    },
+  );
+}
+
+export type ClassifyBankDebitPayload =
+  | { action: "EXCLUDE" }
+  | { action: "RESET" }
+  | {
+      action: "CREATE_EXPENSE";
+      title: string;
+      expenseTypeId: string;
+      expenseDate: string;
+      paymentMethod?: "CASH" | "BANK_TRANSFER" | "CREDIT_CARD" | "OTHER";
+      buildingId?: string;
+      supplierId?: string;
+      referenceNo?: string;
+      description?: string;
+    };
+
+export function classifyBankDebit(auth: AuthContext, id: string, payload: ClassifyBankDebitPayload) {
+  return apiRequest<{ bankTransaction: BankTransaction }>(
+    `/api/bank-transactions/${id}/classify-debit`,
+    {
+      ...auth,
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export type BankProcessPreviewAllocation = {
+  apartmentDebtId: string;
+  amount: string;
+  title: string;
+  periodYear: number | null;
+  periodMonth: number | null;
+  remainingBefore: string;
+  remainingAfter: string;
+};
+
+export type BankProcessPreviewItem = {
+  id: string;
+  eligible: boolean;
+  bulkSafe: boolean;
+  risky: boolean;
+  warning: string | null;
+  amount: string | null;
+  senderHint: string | null;
+  description?: string;
+  transactionDate?: string;
+  apartment: { id: string; number: string; building: { id: string; name: string } } | null;
+  registeredPerson: string | null;
+  matchedPerson: string | null;
+  openDebtTotal: string | null;
+  allocations: BankProcessPreviewAllocation[];
+  matchKind: string | null;
+  nameMismatch: boolean;
+  matchStatus?: BankMatchStatus;
+  apartmentGroupStatus?: string | null;
+  periodHints?: Array<{ year: number | null; month: number }>;
+};
+
+export type BankApartmentGroupStatus =
+  | "READY"
+  | "OVERPAYMENT"
+  | "NO_OPEN_DEBT"
+  | "MANUAL_REVIEW";
+
+export type BankApartmentGroupPreview = {
+  apartmentId: string;
+  apartment: { id: string; number: string; building: { id: string; name: string } } | null;
+  registeredPerson: string | null;
+  ownerLabel?: string | null;
+  senderLabels?: string[];
+  transactionIds: string[];
+  transactionCount: number;
+  totalIncoming: string;
+  openDebtTotal: string;
+  allocatableTotal: string;
+  remainderTotal: string;
+  debtsCovered?: number;
+  unifiedAllocations: Array<{
+    apartmentDebtId: string;
+    title: string;
+    periodYear: number | null;
+    periodMonth: number | null;
+    amount: string;
+    remainingAfter: string;
+  }>;
+  periodConflicts?: Array<{
+    periodYear: number | null;
+    periodMonth: number;
+    label: string;
+    transactionIds: string[];
+  }>;
+  status: BankApartmentGroupStatus;
+  warning: string | null;
+  summaryLine?: string | null;
+  transactionPlans: Array<{
+    transactionId: string;
+    allocations: BankProcessPreviewAllocation[];
+    allocatedTotal: string;
+    remainder: string;
+    allocatable: boolean;
+    periodHints?: Array<{ year: number | null; month: number }>;
+    warning: string | null;
+  }>;
+};
+
+export type BankProcessPreviewResponse = {
+  items: BankProcessPreviewItem[];
+  apartmentGroups?: BankApartmentGroupPreview[];
+  summary: {
+    total: number;
+    eligible: number;
+    bulkSafe: number;
+    risky: number;
+    blocked: number;
+    totalAmount: string;
+    bulkSafeAmount: string;
+    multiPaymentApartmentCount?: number;
+    periodConflictApartmentCount?: number;
+  };
+};
+
+export function previewBankProcessBatch(auth: AuthContext, ids: string[]) {
+  return apiRequest<BankProcessPreviewResponse>("/api/bank-transactions/process-batch/preview", {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export function processBankTransactionBatch(
+  auth: AuthContext,
+  ids: string[],
+  options?: {
+    includeRisky?: boolean;
+    resolvePeriodConflicts?: "SKIP" | "SEQUENTIAL";
+    allocationOverrides?: Array<{
+      transactionId: string;
+      allocations: Array<{ apartmentDebtId: string; amount: number }>;
+    }>;
+  },
+) {
+  return apiRequest<{
+    results: Array<{
+      id: string;
+      status: "processed" | "skipped" | "failed";
+      message: string;
+      paymentId?: string;
+    }>;
+    summary: { processed: number; skipped: number; failed: number };
+    apartmentGroups?: BankApartmentGroupPreview[];
+  }>("/api/bank-transactions/process-batch", {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify({
+      ids,
+      includeRisky: options?.includeRisky ?? false,
+      resolvePeriodConflicts: options?.resolvePeriodConflicts ?? "SKIP",
+      ...(options?.allocationOverrides
+        ? { allocationOverrides: options.allocationOverrides }
+        : {}),
+    }),
   });
 }
 
@@ -300,7 +491,10 @@ export type BankHubSummary = {
   accounts: number;
   pendingMatch: number;
   unmatched: number;
+  unmatchedCredit?: number;
+  unclassifiedDebit: number;
   processedThisMonth: number;
+  expensesThisMonth: number;
 };
 
 export type StatementPreviewMatch = {
@@ -311,6 +505,11 @@ export type StatementPreviewMatch = {
   confidence: "HIGH" | "MEDIUM" | "LOW" | "NONE";
   reason: string;
   candidateCount: number;
+  matchReason?: string;
+  matchKind?: string;
+  matchedPersonRole?: "OWNER" | "TENANT" | null;
+  matchedPersonName?: string | null;
+  nameMismatch?: boolean;
 };
 
 export type StatementPreviewRow = {
@@ -402,11 +601,13 @@ export function getBankHubSummary(auth: AuthContext) {
 export function previewBankStatementImport(
   auth: AuthContext,
   payload: { bankAccountId: string; rows: StatementCommitRow[] },
+  options?: { signal?: AbortSignal },
 ) {
   return apiRequest<StatementPreviewResponse>("/api/bank-transactions/import/preview", {
     ...auth,
     method: "POST",
     body: JSON.stringify(payload),
+    signal: options?.signal,
   });
 }
 
@@ -452,3 +653,4 @@ export function deleteBankColumnTemplate(auth: AuthContext, id: string) {
     method: "DELETE",
   });
 }
+

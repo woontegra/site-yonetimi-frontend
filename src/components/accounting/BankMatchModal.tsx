@@ -22,7 +22,7 @@ import {
 } from "@/lib/money";
 import type { PersonListItem } from "@/lib/persons-api";
 
-type RelatedPerson = {
+export type RelatedPerson = {
   id: string;
   fullName: string;
   roleLabel: string;
@@ -427,4 +427,3 @@ export function BankMatchModal({
   );
 }
 
-export type { RelatedPerson };

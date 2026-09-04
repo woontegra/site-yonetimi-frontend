@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { ChargePreview } from "@/lib/dues-api";
@@ -66,6 +67,12 @@ export function DuesChargeModal({ preview, pending, onClose, onConfirm }: DuesCh
             <CountBox label="Zaten mevcut" value={preview.alreadyChargedCount} />
             <CountBox label="Aktif daire" value={preview.activeApartmentCount} />
           </div>
+
+          {(preview.exemptCount ?? 0) > 0 ? (
+            <AlertBanner tone="warning" title="Muafiyet">
+              {preview.exemptCount} daire yönetici muafiyeti nedeniyle bu dönem borçlandırılmayacaktır.
+            </AlertBanner>
+          ) : null}
 
           {(preview.exemptApartments?.length ?? 0) > 0 ? (
             <div className="rounded-md border border-line bg-surface px-3 py-2 text-sm">

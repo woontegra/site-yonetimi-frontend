@@ -64,7 +64,7 @@ export function VisitorDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: false });
 
   const [visitor, setVisitor] = useState<VisitorDetail | null>(null);
@@ -148,7 +148,7 @@ export function VisitorDetailPage() {
       setArchiveOpen(false);
       router.push("/app/misafirler");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Misafir arşivlenemedi.", "error");
+      toastError(err, "Misafir arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

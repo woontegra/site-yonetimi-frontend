@@ -434,6 +434,8 @@ export async function parseBankStatementFile(
   file: File,
   options?: {
     password?: string;
+    signal?: AbortSignal;
+    timeoutMs?: number;
     onProgress?: (
       phase: "opening" | "extracting_text" | "detecting_transactions" | "preparing_preview",
       detail?: string,
@@ -451,7 +453,10 @@ export async function parseBankStatementFile(
   if (kind === "pdf") {
     const { parseBankStatementPdf, PdfStatementError } = await import("@/lib/bank-statement-pdf");
     try {
-      return await parseBankStatementPdf(file, options);
+      // Re-wrap bytes as File so PDF parser does not re-read a consumed stream oddly;
+      // File from Blob is fine and keeps name for diagnostics.
+      const pdfFile = new File([bytes], file.name, { type: file.type || "application/pdf" });
+      return await parseBankStatementPdf(pdfFile, options);
     } catch (error) {
       if (error instanceof PdfStatementError) throw error;
       throw new Error(error instanceof Error ? error.message : "PDF okunamadı.");

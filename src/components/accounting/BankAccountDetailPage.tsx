@@ -70,7 +70,7 @@ export function BankAccountDetailPage() {
   const params = useParams<{ id: string }>();
   const accountId = params.id;
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth();
   const { site } = useActiveSite();
 
@@ -319,7 +319,7 @@ export function BankAccountDetailPage() {
       setIgnoringTx(null);
       await Promise.all([loadTransactions(), loadAccount()]);
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Yoksayma başarısız.", "error");
+      toastError(error, "Yoksayma başarısız.");
     } finally {
       setIgnorePending(false);
     }
@@ -364,7 +364,7 @@ export function BankAccountDetailPage() {
       setDeletingRule(null);
       await loadRules();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Kural silinemedi.", "error");
+      toastError(error, "Kural silinemedi.");
     } finally {
       setDeleteRulePending(false);
     }
@@ -549,10 +549,18 @@ export function BankAccountDetailPage() {
                                   : `-${formatMoney(tx.amount)}`}
                               </TD>
                               <TD>{BANK_DIRECTION_LABELS[tx.direction]}</TD>
-                              <TD>{BANK_MATCH_STATUS_LABELS[tx.matchStatus]}</TD>
+                              <TD>
+                                {tx.direction === "DEBIT"
+                                  ? tx.debitClass === "EXPENSE" || tx.expense
+                                    ? "Giderle Eşleşti"
+                                    : tx.debitClass === "EXCLUDED" || tx.status === "IGNORED"
+                                      ? "Hariç Tutuldu"
+                                      : "Sınıflandırılmadı"
+                                  : BANK_MATCH_STATUS_LABELS[tx.matchStatus]}
+                              </TD>
                               <TD className="text-right">
                                 <div className="flex flex-wrap items-center justify-end gap-2">
-                                  {tx.matchStatus !== "PROCESSED" ? (
+                                  {tx.direction === "CREDIT" && tx.matchStatus !== "PROCESSED" ? (
                                     <>
                                       <button
                                         type="button"
@@ -573,9 +581,21 @@ export function BankAccountDetailPage() {
                                         className="text-sm text-muted hover:text-danger"
                                         onClick={() => setIgnoringTx(tx)}
                                       >
-                                        Yoksay
+                                        Hariç Tut
                                       </button>
                                     </>
+                                  ) : null}
+                                  {tx.direction === "DEBIT" &&
+                                  !tx.expense &&
+                                  tx.debitClass !== "EXCLUDED" &&
+                                  tx.status === "ACTIVE" ? (
+                                    <button
+                                      type="button"
+                                      className="text-sm text-muted hover:text-danger"
+                                      onClick={() => setIgnoringTx(tx)}
+                                    >
+                                      Hariç Tut
+                                    </button>
                                   ) : null}
                                   {tx.payment?.id ? (
                                     <Link
@@ -583,6 +603,14 @@ export function BankAccountDetailPage() {
                                       className="text-sm text-brand hover:underline"
                                     >
                                       Detay
+                                    </Link>
+                                  ) : null}
+                                  {tx.expense?.id ? (
+                                    <Link
+                                      href={`/app/muhasebe/giderler/${tx.expense.id}`}
+                                      className="text-sm text-brand hover:underline"
+                                    >
+                                      Gider
                                     </Link>
                                   ) : null}
                                 </div>

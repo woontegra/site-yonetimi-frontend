@@ -1,15 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, FileSpreadsheet, Plus, Upload } from "lucide-react";
-import { ApartmentCombobox } from "@/components/apartments/ApartmentCombobox";
+import {
+  StatementReviewWorkspace,
+  countUnresolvedDirection,
+  emptyRowWork,
+  type RowWorkState,
+} from "@/components/accounting/StatementReviewWorkspace";
+import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { FormModal } from "@/components/ui/FormModal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { Table, TableElement, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
+import { useToast } from "@/components/ui/Toast";
 import type { Apartment } from "@/lib/apartments-api";
+import { listApartments } from "@/lib/apartments-api";
+import { isGenericMatchKey } from "@/lib/bank-statement-counterparty";
 import {
   applyMappingToMatrix,
   detectAccountHints,
@@ -35,6 +43,7 @@ import {
   type StatementPreviewRow,
 } from "@/lib/banks-api";
 import { ApiError } from "@/lib/http";
+import { normalizeApiError } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
 
@@ -42,21 +51,18 @@ type Step = 1 | 2 | 3 | 4;
 
 type AuthCtx = { token: string; tenantId: string; siteId?: string | null };
 
-type ManualOverride = {
-  apartmentId: string;
-  personId?: string;
-  createRule?: boolean;
-  containsText?: string;
-  processPayment?: boolean;
-};
-
 type WizardProps = {
   open: boolean;
   auth: AuthCtx;
   accounts: BankAccount[];
   apartments: Apartment[];
   onClose: () => void;
-  onDone: () => void;
+  onDone: (result?: {
+    createdCount: number;
+    processedPayments: number;
+    duplicateSkipped: number;
+    matchedWithoutPayment: number;
+  }) => void;
   /** Hesap oluşturulunca üst listeyi yenile (sihirbaz kapanmaz). */
   onAccountsChanged?: () => void | Promise<void>;
 };
@@ -68,16 +74,6 @@ const STEPS = [
   { id: 4 as const, label: "Onayla ve Aktar" },
 ];
 
-function previewStatusLabel(row: StatementPreviewRow): string {
-  if (row.previewStatus === "DUPLICATE") return "Mükerrer";
-  if (row.previewStatus === "INVALID") return "Geçersiz";
-  if (row.previewStatus === "DEBIT_SKIP_PAYMENT") return "Giden";
-  if (row.previewStatus === "AMBIGUOUS") return "Birden fazla aday";
-  if (row.match?.matchStatus === "SUGGESTED") return "Otomatik Eşleşti";
-  if (row.match?.matchStatus === "UNMATCHED") return "Eşleşmedi";
-  return "Hazır";
-}
-
 function defaultAccountId(list: BankAccount[]): string {
   if (list.length === 1) return list[0]!.id;
   return "";
@@ -87,13 +83,19 @@ export function BankStatementImportWizard({
   open,
   auth,
   accounts,
-  apartments,
+  apartments: apartmentsProp,
   onClose,
   onDone,
   onAccountsChanged,
 }: WizardProps) {
+  const { showToast } = useToast();
   const [step, setStep] = useState<Step>(1);
+  const [pending, setPending] = useState(false);
+  /** DEFER = kaydet, tahsilatı sonra onayla (varsayılan). COLLECT_NOW = onaylananları şimdi tahsilata aktar. */
+  const [paymentTiming, setPaymentTiming] = useState<"DEFER" | "COLLECT_NOW">("DEFER");
   const [localAccounts, setLocalAccounts] = useState<BankAccount[]>(accounts);
+  const [apartments, setApartments] = useState<Apartment[]>(apartmentsProp);
+  const [apartmentsLoading, setApartmentsLoading] = useState(false);
   const [bankAccountId, setBankAccountId] = useState("");
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [accountForm, setAccountForm] = useState({
@@ -139,18 +141,22 @@ export function BankStatementImportWizard({
     unmatchedCount: number;
     importableCreditTotal: string;
   } | null>(null);
-  const [overrides, setOverrides] = useState<Record<number, ManualOverride>>({});
-  const [skipped, setSkipped] = useState<Record<number, boolean>>({});
+  const [rowWork, setRowWork] = useState<Record<number, RowWorkState>>({});
   const [templates, setTemplates] = useState<BankColumnTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
   const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const [matchRowIndex, setMatchRowIndex] = useState<number | null>(null);
-  const [matchApartmentId, setMatchApartmentId] = useState("");
-  const [matchCreateRule, setMatchCreateRule] = useState(true);
-  const [matchPattern, setMatchPattern] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  const requestGenRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function abortActiveWork() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    requestGenRef.current += 1;
+  }
 
   const reset = useCallback(() => {
+    abortActiveWork();
     setStep(1);
     setLocalAccounts(accounts);
     setBankAccountId(defaultAccountId(accounts));
@@ -179,16 +185,19 @@ export function BankStatementImportWizard({
     setAccountHints(null);
     setPreviewRows([]);
     setPreviewSummary(null);
-    setOverrides({});
-    setSkipped({});
+    setRowWork({});
     setTemplateName("");
     setError("");
     setPending(false);
-    setMatchRowIndex(null);
+    setPaymentTiming("DEFER");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }, [accounts]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      abortActiveWork();
+      return;
+    }
     reset();
   }, [open, reset]);
 
@@ -209,6 +218,27 @@ export function BankStatementImportWizard({
       .then((result) => setTemplates(result.items))
       .catch(() => setTemplates([]));
   }, [open, auth, bankAccountId]);
+
+  // Manuel eşleştirme combobox: aktif sitedeki daireleri taze yükle (boş aramada tüm daireler).
+  useEffect(() => {
+    if (!open || !auth) return;
+    setApartments(apartmentsProp);
+    let cancelled = false;
+    setApartmentsLoading(true);
+    void listApartments(auth, { status: "aktif", perPage: 200 })
+      .then((result) => {
+        if (!cancelled) setApartments(result.items);
+      })
+      .catch(() => {
+        if (!cancelled && apartmentsProp.length > 0) setApartments(apartmentsProp);
+      })
+      .finally(() => {
+        if (!cancelled) setApartmentsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, auth, apartmentsProp]);
 
   async function tryMatchAccountFromHints(
     hints: DetectedAccountHints,
@@ -253,22 +283,35 @@ export function BankStatementImportWizard({
       return;
     }
 
+    abortActiveWork();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const requestGen = requestGenRef.current;
+    const previewTimeout = window.setTimeout(() => {
+      if (!controller.signal.aborted) controller.abort();
+    }, 60_000);
+
     setError("");
     setPending(true);
     setPendingFile(file);
-    setParseProgress("Dosya açılıyor…");
+    setParseProgress("Dosya doğrulanıyor…");
     try {
       const parsed = await parseBankStatementFile(file, {
         password,
+        signal: controller.signal,
+        timeoutMs: 45_000,
         onProgress: (phase: PdfParseProgress, detail) => {
-          if (phase === "opening") setParseProgress("Dosya açılıyor…");
+          if (requestGen !== requestGenRef.current) return;
+          if (phase === "opening") setParseProgress("PDF açılıyor…");
           else if (phase === "extracting_text")
-            setParseProgress(`Metin çıkarılıyor…${detail ? ` (${detail})` : ""}`);
+            setParseProgress(detail ? `${detail} sayfa okunuyor…` : "Metin çıkarılıyor…");
           else if (phase === "detecting_transactions")
             setParseProgress("Hareketler belirleniyor…");
-          else if (phase === "preparing_preview") setParseProgress("Kontrol hazırlanıyor…");
+          else if (phase === "preparing_preview") setParseProgress("Önizleme hazırlanıyor…");
         },
       });
+
+      if (requestGen !== requestGenRef.current || controller.signal.aborted) return;
 
       setFileName(file.name);
       setFileKind(parsed.sourceKind === "pdf" ? "pdf" : "spreadsheet");
@@ -292,7 +335,9 @@ export function BankStatementImportWizard({
         setMatrix([]);
       } else {
         setPdfMeta(null);
+        setParseProgress("Tablo okunuyor…");
         const matrixResult = await readStatementMatrix(file);
+        if (requestGen !== requestGenRef.current || controller.signal.aborted) return;
         setMatrix(matrixResult.matrix);
         if (!parsed.accountHints) {
           setAccountHints(detectAccountHints(matrixResult.matrix, parsed.headerRowIndex));
@@ -302,7 +347,9 @@ export function BankStatementImportWizard({
       let selectedId = bankAccountId;
       const hints = parsed.accountHints;
       if (hints) {
+        setParseProgress("Hesap eşleştiriliyor…");
         const matched = await tryMatchAccountFromHints(hints, localAccounts);
+        if (requestGen !== requestGenRef.current || controller.signal.aborted) return;
         if (matched) {
           selectedId = matched;
           setBankAccountId(matched);
@@ -318,14 +365,38 @@ export function BankStatementImportWizard({
       }
 
       if (parsed.mappingComplete && parsed.rows.length > 0) {
-        await runPreview(parsed.rows, selectedId);
+        setParseProgress("Önizleme hazırlanıyor…");
+        await runPreview(parsed.rows, selectedId, {
+          signal: controller.signal,
+          requestGen,
+          clearProgressOnSuccess: true,
+          nested: true,
+        });
       } else if (parsed.sourceKind === "pdf") {
-        setError("PDF metni okundu ancak hareket sütunları otomatik belirlenemedi.");
+        setError("PDF okundu ancak banka hareketleri belirlenemedi.");
         setStep(1);
       } else {
         setStep(2);
       }
     } catch (err) {
+      if (requestGen !== requestGenRef.current) return;
+      if (
+        (err instanceof PdfStatementError && (err.code === "ABORTED" || err.code === "TIMEOUT")) ||
+        (err instanceof ApiError && err.code === "ABORTED") ||
+        (err instanceof DOMException && err.name === "AbortError")
+      ) {
+        const timedOut =
+          (err instanceof PdfStatementError && err.code === "TIMEOUT") ||
+          controller.signal.aborted;
+        setError(
+          timedOut
+            ? "PDF beklenen sürede işlenemedi. Dosyayı yeniden deneyin veya farklı formatta yükleyin."
+            : "İşlem iptal edildi.",
+        );
+        setParseProgress("");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       if (err instanceof PdfStatementError && err.code === "PASSWORD_REQUIRED") {
         setPdfPasswordRequired(true);
         setPendingFile(file);
@@ -340,11 +411,30 @@ export function BankStatementImportWizard({
         setParseProgress("");
         return;
       }
+      if (err instanceof PdfStatementError) {
+        const messages: Partial<Record<PdfStatementError["code"], string>> = {
+          SCANNED: "PDF’de okunabilir metin bulunamadı. Dosya taranmış olabilir.",
+          NO_TRANSACTIONS: "PDF okundu ancak banka hareketleri belirlenemedi.",
+          TIMEOUT: "PDF beklenen sürede işlenemedi.",
+          WORKER_FAILED: "PDF işlenirken bir hata oluştu. Dosyayı yeniden deneyin.",
+          PARSE_FAILED: "PDF işlenirken bir hata oluştu. Dosyayı yeniden deneyin.",
+        };
+        setError(messages[err.code] ?? err.message);
+        setParseProgress("");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       setError(err instanceof Error ? err.message : "Dosya okunamadı.");
       setParseProgress("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
-      setPending(false);
-      setParseProgress("");
+      window.clearTimeout(previewTimeout);
+      if (requestGen === requestGenRef.current) {
+        setPending(false);
+        // Keep progress only while still pending; clear when this generation finishes.
+        setParseProgress("");
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -359,7 +449,16 @@ export function BankStatementImportWizard({
     setParseErrors(result.errors);
   }
 
-  async function runPreview(rows: ParsedStatementRow[] = parsedRows, accountId = bankAccountId) {
+  async function runPreview(
+    rows: ParsedStatementRow[] = parsedRows,
+    accountId = bankAccountId,
+    options?: {
+      signal?: AbortSignal;
+      requestGen?: number;
+      clearProgressOnSuccess?: boolean;
+      nested?: boolean;
+    },
+  ) {
     if (!auth || !accountId) {
       setError("Banka hesabı seçin.");
       return;
@@ -368,31 +467,104 @@ export function BankStatementImportWizard({
       setError("Önizlenecek satır yok.");
       return;
     }
-    setPending(true);
+
+    const nested = Boolean(options?.nested);
+    const ownsController = !options?.signal;
+    const controller = options?.signal
+      ? null
+      : (() => {
+          abortActiveWork();
+          const next = new AbortController();
+          abortRef.current = next;
+          return next;
+        })();
+    const signal = options?.signal ?? controller!.signal;
+    const requestGen = options?.requestGen ?? requestGenRef.current;
+    const timeoutId = ownsController
+      ? window.setTimeout(() => {
+          if (!signal.aborted) (controller as AbortController).abort();
+        }, 60_000)
+      : null;
+
+    if (!nested) {
+      setPending(true);
+      setParseProgress("Önizleme hazırlanıyor…");
+    }
     setError("");
     try {
-      const result = await previewBankStatementImport(auth, {
-        bankAccountId: accountId,
-        rows: rows.map((row) => ({
-          transactionDate: row.transactionDate,
-          valueDate: row.valueDate,
-          direction: row.direction,
-          amount: row.amount,
-          description: row.description,
-          referenceNo: row.referenceNo,
-          balanceAfter: row.balanceAfter,
-          sourceRowNumber: row.sourceRowNumber,
-          sourcePage: row.sourcePage ?? null,
-        })),
-      });
+      const result = await previewBankStatementImport(
+        auth,
+        {
+          bankAccountId: accountId,
+          rows: rows.map((row) => ({
+            transactionDate: row.transactionDate,
+            valueDate: row.valueDate,
+            direction: row.direction,
+            amount: row.amount,
+            description: row.description,
+            referenceNo: row.referenceNo,
+            balanceAfter: row.balanceAfter,
+            sourceRowNumber: row.sourceRowNumber,
+            sourcePage: row.sourcePage ?? null,
+          })),
+        },
+        { signal },
+      );
+      if (requestGen !== requestGenRef.current || signal.aborted) return;
       setPreviewRows(result.rows);
+      setRowWork(
+        Object.fromEntries(
+          result.rows.map((row) => {
+            const base = emptyRowWork();
+            if (row.previewStatus === "DUPLICATE" || row.previewStatus === "INVALID") {
+              base.decision = "EXCLUDE";
+            } else if (
+              row.direction === "DEBIT" ||
+              row.previewStatus === "DEBIT_SKIP_PAYMENT"
+            ) {
+              base.decision = "BANK_ONLY";
+            }
+            return [row.rowIndex, base];
+          }),
+        ),
+      );
       setPreviewSummary(result.summary);
       setStep(3);
+      if (options?.clearProgressOnSuccess) setParseProgress("");
+      showToast({
+        title: `Ekstre başarıyla okundu. ${result.rows.length} hareket bulundu.`,
+        tone: "info",
+      });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Önizleme başarısız.");
+      if (requestGen !== requestGenRef.current) return;
+      if (
+        (err instanceof ApiError && err.code === "ABORTED") ||
+        (err instanceof DOMException && err.name === "AbortError") ||
+        signal.aborted
+      ) {
+        setError(
+          ownsController
+            ? "Önizleme beklenen sürede tamamlanamadı veya iptal edildi."
+            : "İşlem iptal edildi.",
+        );
+        return;
+      }
+      const normalized = normalizeApiError(err, "Önizleme başarısız.");
+      setError(normalized.userMessage);
     } finally {
-      setPending(false);
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+      if (!nested && requestGen === requestGenRef.current) {
+        setPending(false);
+        setParseProgress("");
+      }
     }
+  }
+
+  function handleCancelOrClose() {
+    abortActiveWork();
+    setPending(false);
+    setParseProgress("");
+    onClose();
   }
 
   async function handleSaveAccount() {
@@ -433,25 +605,138 @@ export function BankStatementImportWizard({
     }
   }
 
-  function openMatch(row: StatementPreviewRow) {
-    setMatchRowIndex(row.rowIndex);
-    setMatchApartmentId(overrides[row.rowIndex]?.apartmentId ?? row.match?.apartmentId ?? "");
-    setMatchCreateRule(true);
-    setMatchPattern(row.suggestedPattern ?? "");
+  function patchRowWork(rowIndex: number, patch: Partial<RowWorkState>) {
+    setRowWork((prev) => ({
+      ...prev,
+      [rowIndex]: { ...(prev[rowIndex] ?? emptyRowWork()), ...patch },
+    }));
   }
 
-  function saveMatch() {
-    if (matchRowIndex == null || !matchApartmentId) return;
-    setOverrides((prev) => ({
-      ...prev,
-      [matchRowIndex]: {
-        apartmentId: matchApartmentId,
-        createRule: matchCreateRule,
-        containsText: matchPattern.trim() || undefined,
-        processPayment: true,
-      },
-    }));
-    setMatchRowIndex(null);
+  function patchRowWorkBatch(indexes: number[], patch: Partial<RowWorkState>) {
+    setRowWork((prev) => {
+      const next = { ...prev };
+      for (const rowIndex of indexes) {
+        const current = next[rowIndex] ?? emptyRowWork();
+        const row = previewRows.find((item) => item.rowIndex === rowIndex);
+        const merged = { ...current, ...patch };
+        // Yüksek güven onayında daireyi öneriden al
+        if (patch.decision === "COLLECT" && !merged.apartmentId && row?.match?.apartmentId) {
+          merged.apartmentId = row.match.apartmentId;
+          merged.personId = row.match.personId;
+        }
+        next[rowIndex] = merged;
+      }
+      return next;
+    });
+  }
+
+  const directionSuspectIds = useMemo(() => {
+    const set = new Set<number>();
+    const isDirectionWarning = (text: string) =>
+      text.toLocaleLowerCase("tr-TR").includes("tutar yönü");
+    for (const row of previewRows) {
+      const parsed = parsedRows.find((item) => item.sourceRowNumber === row.sourceRowNumber);
+      if (parsed?.warnings?.some((w) => isDirectionWarning(w))) {
+        set.add(row.rowIndex);
+      }
+    }
+    for (const err of parseErrors) {
+      if (!isDirectionWarning(err.message)) continue;
+      const row = previewRows.find((item) => item.sourceRowNumber === err.rowNumber);
+      if (row) set.add(row.rowIndex);
+    }
+    return set;
+  }, [previewRows, parsedRows, parseErrors]);
+
+  const unresolvedDirectionCount = countUnresolvedDirection(
+    previewRows,
+    rowWork,
+    directionSuspectIds,
+  );
+
+  const commitPreviewCounts = useMemo(() => {
+    let collect = 0;
+    let collectAmount = 0;
+    for (const row of previewRows) {
+      const w = rowWork[row.rowIndex] ?? emptyRowWork();
+      const dir = w.directionOverride ?? row.direction;
+      if (w.decision === "COLLECT" && dir === "CREDIT") {
+        collect += 1;
+        collectAmount += row.amount;
+      }
+    }
+    return { collect, collectAmount };
+  }, [previewRows, rowWork]);
+
+  async function handleCommit() {
+    if (!auth || !bankAccountId || previewRows.length === 0) return;
+    if (unresolvedDirectionCount > 0) {
+      setError(
+        `${unresolvedDirectionCount} satırda tutar yönü doğrulanmadan içe aktarım yapılamaz.`,
+      );
+      return;
+    }
+    setPending(true);
+    setError("");
+    try {
+      const rows = previewRows.map((row) => {
+        const w = rowWork[row.rowIndex] ?? emptyRowWork();
+        const direction = w.directionOverride ?? row.direction;
+        const decision =
+          w.decision ??
+          (direction === "DEBIT" || row.previewStatus === "DEBIT_SKIP_PAYMENT"
+            ? "BANK_ONLY"
+            : null);
+        const matchedApartmentId =
+          decision === "COLLECT"
+            ? (w.apartmentId ?? row.match?.apartmentId ?? null)
+            : null;
+        const matchedPersonId =
+          decision === "COLLECT" ? (w.personId ?? row.match?.personId ?? null) : null;
+        const skip =
+          decision === "EXCLUDE" ||
+          row.previewStatus === "DUPLICATE" ||
+          row.previewStatus === "INVALID";
+        const processPayment =
+          paymentTiming === "COLLECT_NOW" &&
+          decision === "COLLECT" &&
+          direction === "CREDIT" &&
+          Boolean(matchedApartmentId) &&
+          !skip;
+        const ruleText = w.ruleText.trim();
+        const createRule =
+          Boolean(w.createRule && processPayment && matchedApartmentId && ruleText) &&
+          !isGenericMatchKey(ruleText);
+
+        return {
+          transactionDate: row.transactionDate,
+          valueDate: row.valueDate,
+          direction,
+          amount: row.amount,
+          description: row.description,
+          referenceNo: row.referenceNo,
+          balanceAfter: row.balanceAfter,
+          sourceRowNumber: row.sourceRowNumber,
+          sourcePage: row.sourcePage ?? null,
+          fingerprint: row.fingerprint,
+          matchedApartmentId,
+          matchedPersonId,
+          processPayment,
+          createRule,
+          containsText: createRule ? ruleText : undefined,
+          skip,
+        };
+      });
+
+      const result = await commitBankStatementImport(auth, { bankAccountId, rows });
+      onDone(result);
+      onClose();
+    } catch (err) {
+      const normalized = normalizeApiError(err, "Aktarım başarısız.");
+      setError(normalized.userMessage);
+    } finally {
+      setPending(false);
+    }
   }
 
   async function saveTemplate() {
@@ -482,56 +767,6 @@ export function BankStatementImportWizard({
     }
   }
 
-  async function handleCommit() {
-    if (!auth || !bankAccountId || previewRows.length === 0) return;
-    setPending(true);
-    setError("");
-    try {
-      const rows = previewRows.map((row) => {
-        const override = overrides[row.rowIndex];
-        const matchedApartmentId = override?.apartmentId ?? row.match?.apartmentId ?? null;
-        const matchedPersonId = override?.personId ?? row.match?.personId ?? null;
-        const autoProcess =
-          row.direction === "CREDIT" &&
-          Boolean(matchedApartmentId) &&
-          row.previewStatus !== "DUPLICATE" &&
-          row.previewStatus !== "INVALID" &&
-          override?.processPayment !== false &&
-          (Boolean(override) ||
-            (row.match?.matchStatus === "SUGGESTED" &&
-              row.match.confidence !== "LOW" &&
-              row.canAutoProcess));
-
-        return {
-          transactionDate: row.transactionDate,
-          valueDate: row.valueDate,
-          direction: row.direction,
-          amount: row.amount,
-          description: row.description,
-          referenceNo: row.referenceNo,
-          balanceAfter: row.balanceAfter,
-          sourceRowNumber: row.sourceRowNumber,
-          sourcePage: row.sourcePage ?? null,
-          fingerprint: row.fingerprint,
-          matchedApartmentId,
-          matchedPersonId,
-          processPayment: Boolean(autoProcess),
-          createRule: Boolean(override?.createRule && override.containsText),
-          containsText: override?.containsText,
-          skip: Boolean(skipped[row.rowIndex]) || row.previewStatus === "DUPLICATE",
-        };
-      });
-
-      await commitBankStatementImport(auth, { bankAccountId, rows });
-      onDone();
-      onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Aktarım başarısız.");
-    } finally {
-      setPending(false);
-    }
-  }
-
   const mappingFields: Array<{ key: keyof ColumnMapping; label: string }> = [
     { key: "date", label: "İşlem tarihi *" },
     { key: "valueDate", label: "Valör tarihi" },
@@ -547,11 +782,11 @@ export function BankStatementImportWizard({
     <FormModal
       open={open}
       onClose={() => {
-        if (!pending) onClose();
+        handleCancelOrClose();
       }}
       title="Ekstre İçe Aktar"
       description="Banka ekstresini yükleyin, eşleştirin ve onay sonrası tahsilata aktarın. Onay öncesi ödeme oluşmaz."
-      size="xl"
+      size={step >= 3 ? "workspace" : "xl"}
       footer={
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <Button
@@ -562,10 +797,26 @@ export function BankStatementImportWizard({
           >
             Geri
           </Button>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
-              İptal
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {pending ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  abortActiveWork();
+                  setPending(false);
+                  setParseProgress("");
+                  setError("İşlem iptal edildi.");
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              >
+                İşlemi İptal Et
+              </Button>
+            ) : (
+              <Button type="button" variant="secondary" onClick={handleCancelOrClose}>
+                İptal
+              </Button>
+            )}
             {step === 2 ? (
               <Button
                 type="button"
@@ -576,13 +827,41 @@ export function BankStatementImportWizard({
               </Button>
             ) : null}
             {step === 3 ? (
-              <Button type="button" disabled={pending} onClick={() => setStep(4)}>
-                Onaya Geç
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted">
+                  Tahsilat: {commitPreviewCounts.collect} /{" "}
+                  {formatMoney(commitPreviewCounts.collectAmount)}
+                  {unresolvedDirectionCount > 0
+                    ? ` · Şüpheli yön: ${unresolvedDirectionCount}`
+                    : ""}
+                </span>
+                <Button
+                  type="button"
+                  disabled={pending || unresolvedDirectionCount > 0}
+                  onClick={() => setStep(4)}
+                >
+                  Onaya Geç
+                </Button>
+              </div>
             ) : null}
             {step === 4 ? (
-              <Button type="button" disabled={pending} onClick={() => void handleCommit()}>
-                {pending ? "Aktarılıyor…" : "Onayla ve Aktar"}
+              <Button
+                type="button"
+                disabled={pending || unresolvedDirectionCount > 0}
+                onClick={() => void handleCommit()}
+              >
+                {pending
+                  ? "Aktarılıyor…"
+                  : `${
+                      previewRows.filter((row) => {
+                        const w = rowWork[row.rowIndex] ?? emptyRowWork();
+                        return (
+                          w.decision !== "EXCLUDE" &&
+                          row.previewStatus !== "DUPLICATE" &&
+                          row.previewStatus !== "INVALID"
+                        );
+                      }).length
+                    } Hareketi İçe Aktar`}
               </Button>
             ) : null}
           </div>
@@ -765,14 +1044,15 @@ export function BankStatementImportWizard({
 
           {parseProgress ? (
             <p className="text-sm text-muted" aria-live="polite">
-              Ekstre okunuyor… {parseProgress}
+              {parseProgress}
             </p>
           ) : null}
 
           <label
             className={cn(
               "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center hover:border-accent/50",
-              (!bankAccountId || pending) && "pointer-events-none opacity-50",
+              !bankAccountId && "pointer-events-none opacity-50",
+              pending && "opacity-70",
             )}
           >
             <Upload className="size-8 text-accent" aria-hidden />
@@ -784,11 +1064,15 @@ export function BankStatementImportWizard({
               </p>
             </div>
             <input
+              ref={fileInputRef}
               type="file"
               accept=".xlsx,.xls,.csv,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
               className="hidden"
               disabled={!bankAccountId || pending}
-              onChange={(e) => void handleFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const next = e.target.files?.[0] ?? null;
+                void handleFile(next);
+              }}
             />
           </label>
         </div>
@@ -898,189 +1182,76 @@ export function BankStatementImportWizard({
       ) : null}
 
       {step === 3 || step === 4 ? (
-        <div className="space-y-4">
-          {pdfMeta?.warnings?.length ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-              <p className="font-medium">PDF uyarıları</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                {pdfMeta.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-              {pdfMeta.balanceChainOk === false ? (
-                <p className="mt-2 font-medium">
-                  Ekstre bakiyesiyle ayrıştırılan hareketler arasında fark var.
-                </p>
+        <div className="space-y-3">
+          {step === 4 ? (
+            <div className="space-y-2">
+              <AlertBanner tone="warning" title="Son onay">
+                Son onay verilmeden tahsilat oluşmaz. Aşağıdaki seçeneğe göre hareketler kaydedilir.
+              </AlertBanner>
+              <div className="rounded-xl border border-line bg-canvas px-3 py-3 space-y-2">
+                <p className="text-sm font-medium text-ink">Tahsilat zamanlaması</p>
+                <label className="flex items-start gap-2 text-sm text-ink">
+                  <input
+                    type="radio"
+                    name="paymentTiming"
+                    checked={paymentTiming === "DEFER"}
+                    onChange={() => setPaymentTiming("DEFER")}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-medium">Hareketleri kaydet, tahsilatları daha sonra onaylayacağım</span>
+                    <span className="block text-xs text-muted">
+                      Varsayılan güvenli seçenek. Eşleşmeler onay bekleyen olarak kalır; Payment oluşmaz.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-ink">
+                  <input
+                    type="radio"
+                    name="paymentTiming"
+                    checked={paymentTiming === "COLLECT_NOW"}
+                    onChange={() => setPaymentTiming("COLLECT_NOW")}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-medium">Onayladığım eşleşmeleri şimdi tahsilata aktar</span>
+                    <span className="block text-xs text-muted">
+                      Kararı &quot;Tahsilata aktar&quot; olan gelen hareketler için Payment oluşturulur.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {(previewSummary?.unmatchedCount ?? 0) > 0 ? (
+                <AlertBanner tone="info" title="Eşleşmeyen hareketler">
+                  {previewSummary!.unmatchedCount} hareket henüz daireyle eşleştirilmedi. Bunlar
+                  banka kaydı olarak aktarılabilir; tahsilat oluşmaz.
+                </AlertBanner>
+              ) : null}
+              {(pdfMeta?.warnings?.length ?? 0) > 0 ? (
+                <AlertBanner tone="warning" title="Ayrıştırma uyarıları">
+                  {pdfMeta!.warnings.length} satırda ayrıştırma uyarısı bulunuyor.
+                </AlertBanner>
               ) : null}
             </div>
           ) : null}
-
-          {previewSummary ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                ["Toplam", previewSummary.totalRows],
-                ["Gelen", previewSummary.creditCount],
-                ["Giden", previewSummary.debitCount],
-                ["Mükerrer", previewSummary.duplicateCount],
-                ["Otomatik", previewSummary.autoMatchedCount],
-                ["Eşleşmeyen", previewSummary.unmatchedCount],
-                ["Geçersiz", previewSummary.invalidCount],
-                ["İçe aktarılacak", formatMoney(previewSummary.importableCreditTotal)],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-lg bg-slate-50 px-3 py-2">
-                  <p className="text-xs text-muted">{label}</p>
-                  <p className="text-sm font-semibold text-ink">{value}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="max-h-[420px] overflow-auto rounded-lg border border-slate-200">
-            <Table>
-              <TableElement>
-                <THead>
-                  <TR className="hover:bg-transparent">
-                    <TH>Tarih</TH>
-                    <TH>Açıklama</TH>
-                    <TH className="text-right">Gelen</TH>
-                    <TH className="text-right">Giden</TH>
-                    <TH>Sayfa</TH>
-                    <TH>Eşleşme</TH>
-                    <TH>Durum</TH>
-                    {step === 3 ? <TH>İşlem</TH> : <TH>Dağıtım</TH>}
-                  </TR>
-                </THead>
-                <TBody>
-                  {previewRows.map((row) => {
-                    const override = overrides[row.rowIndex];
-                    const aptId = override?.apartmentId ?? row.match?.apartmentId;
-                    const apt = apartments.find((item) => item.id === aptId);
-                    return (
-                      <TR
-                        key={row.rowIndex}
-                        className={cn(
-                          skipped[row.rowIndex] && "opacity-40",
-                          parseErrors.some((e) => e.rowNumber === row.sourceRowNumber) &&
-                            "bg-amber-50/80",
-                        )}
-                      >
-                        <TD className="whitespace-nowrap text-sm">{row.transactionDate}</TD>
-                        <TD className="max-w-[220px] truncate text-sm" title={row.description}>
-                          {row.description}
-                        </TD>
-                        <TD className="text-right text-sm">
-                          {row.direction === "CREDIT" ? formatMoney(row.amount) : "—"}
-                        </TD>
-                        <TD className="text-right text-sm">
-                          {row.direction === "DEBIT" ? formatMoney(row.amount) : "—"}
-                        </TD>
-                        <TD className="text-sm text-muted">
-                          {row.sourcePage != null ? String(row.sourcePage) : "—"}
-                        </TD>
-                        <TD className="text-sm">
-                          {apt ? `${apt.building.name} / ${apt.number}` : row.message}
-                        </TD>
-                        <TD className="text-sm">{previewStatusLabel(row)}</TD>
-                        {step === 3 ? (
-                          <TD>
-                            <div className="flex flex-wrap gap-1">
-                              {row.direction === "CREDIT" && row.previewStatus !== "DUPLICATE" ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => openMatch(row)}
-                                >
-                                  Eşleştir
-                                </Button>
-                              ) : null}
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  setSkipped((prev) => ({
-                                    ...prev,
-                                    [row.rowIndex]: !prev[row.rowIndex],
-                                  }))
-                                }
-                              >
-                                {skipped[row.rowIndex] ? "Dahil Et" : "Atla"}
-                              </Button>
-                            </div>
-                          </TD>
-                        ) : (
-                          <TD className="text-xs text-muted">
-                            {row.allocationPreview?.length
-                              ? row.allocationPreview
-                                  .map((item) => `${item.label}: ${formatMoney(item.amount)}`)
-                                  .join(" · ")
-                              : override
-                                ? "Manuel eşleşme — onayda dağıtılır"
-                                : "—"}
-                          </TD>
-                        )}
-                      </TR>
-                    );
-                  })}
-                </TBody>
-              </TableElement>
-            </Table>
-          </div>
-
-          {parseErrors.length > 0 ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              <p className="font-medium">Parse uyarıları</p>
-              <ul className="mt-1 list-disc pl-5">
-                {parseErrors.slice(0, 8).map((item) => (
-                  <li key={`${item.rowNumber}-${item.message}`}>
-                    Satır {item.rowNumber}: {item.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {matchRowIndex != null ? (
-        <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-medium text-ink">Manuel eşleştirme</p>
-          <FormField label="Daire" htmlFor="match-apt">
-            <ApartmentCombobox
-              id="match-apt"
-              apartments={apartments}
-              value={matchApartmentId}
-              onChange={setMatchApartmentId}
-            />
-          </FormField>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={matchCreateRule}
-              onChange={(e) => setMatchCreateRule(e.target.checked)}
-            />
-            <span>Bu göndericiyi sonraki işlemlerde aynı daireyle eşleştir</span>
-          </label>
-          {matchCreateRule ? (
-            <FormField label="Kural anahtarı (açıklama parçası)" htmlFor="match-pat">
-              <Input
-                id="match-pat"
-                value={matchPattern}
-                onChange={(e) => setMatchPattern(e.target.value)}
-                placeholder="Örn. ad soyad veya kısa ibare"
-              />
-            </FormField>
-          ) : null}
-          <div className="flex gap-2">
-            <Button type="button" onClick={saveMatch} disabled={!matchApartmentId}>
-              Kaydet
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setMatchRowIndex(null)}>
-              Vazgeç
-            </Button>
-          </div>
+          <StatementReviewWorkspace
+            step={step}
+            rows={previewRows}
+            summary={previewSummary}
+            apartments={apartments}
+            apartmentsLoading={apartmentsLoading}
+            work={rowWork}
+            onWorkChange={patchRowWork}
+            onWorkBatch={patchRowWorkBatch}
+            warnings={[
+              ...(pdfMeta?.warnings ?? []),
+              ...(pdfMeta?.balanceChainOk === false
+                ? ["Ekstre bakiyesiyle ayrıştırılan hareketler arasında fark var."]
+                : []),
+            ]}
+            directionSuspectIds={directionSuspectIds}
+            parseErrorCount={parseErrors.length}
+          />
         </div>
       ) : null}
     </FormModal>

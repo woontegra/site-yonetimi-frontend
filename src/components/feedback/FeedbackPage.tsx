@@ -71,7 +71,7 @@ function statusTone(status: FeedbackStatus): "neutral" | "success" | "warning" |
 export function FeedbackPage() {
   const router = useRouter();
   const { ready } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, siteId, hasSites } = useActiveSite();
 
@@ -227,7 +227,7 @@ export function FeedbackPage() {
       setArchiving(null);
       await load();
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : "Arşivlenemedi.", "error");
+      toastError(error, "Arşivlenemedi.");
     } finally {
       setArchivePending(false);
     }

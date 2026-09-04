@@ -37,9 +37,9 @@ export function BuildingCard({ building, siteFallback, onEdit, onDelete }: Build
     capacity != null && capacity > 0 ? Math.min(100, Math.round((registered / capacity) * 100)) : null;
 
   return (
-    <SurfaceCard padding="none" className="flex h-full flex-col overflow-hidden">
+    <SurfaceCard padding="none" tone="cyan" interactive className="flex h-full flex-col overflow-hidden">
       <div className="flex items-start gap-3 border-b border-line px-5 py-4">
-        <EntityIcon icon={Building2} />
+        <EntityIcon icon={Building2} tone="cyan" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

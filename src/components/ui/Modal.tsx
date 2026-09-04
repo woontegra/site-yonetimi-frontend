@@ -12,7 +12,17 @@ import { X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export type ModalVariant = "form" | "confirm" | "detail";
-export type ModalSize = "sm" | "md" | "lg" | "xl" | "full" | "small" | "medium" | "large" | "wide";
+export type ModalSize =
+  | "sm"
+  | "md"
+  | "lg"
+  | "xl"
+  | "full"
+  | "workspace"
+  | "small"
+  | "medium"
+  | "large"
+  | "wide";
 
 export type ModalProps = {
   open: boolean;
@@ -38,6 +48,7 @@ const sizes: Record<ModalSize, string> = {
   xl: "max-w-[960px] sm:mx-4",
   wide: "max-w-[1040px] sm:mx-4",
   full: "max-w-[1100px] sm:mx-4",
+  workspace: "max-w-none sm:mx-3 sm:w-[min(calc(100vw-24px),1680px)]",
 };
 
 const variantSize: Record<ModalVariant, ModalSize> = {
@@ -84,6 +95,7 @@ export function Modal({
   const [entered, setEntered] = useState(false);
 
   const resolvedSize = size ?? variantSize[variant];
+  const isWorkspace = resolvedSize === "workspace";
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -159,7 +171,12 @@ export function Modal({
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex items-end justify-center p-0",
+        isWorkspace ? "sm:items-center sm:p-3" : "sm:items-center sm:p-4",
+      )}
+    >
       <div
         aria-hidden
         className={cn(
@@ -175,14 +192,17 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
-          "relative z-10 flex h-[min(100dvh,100%)] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden rounded-none border border-line bg-surface shadow-modal sm:h-auto sm:max-h-[88vh] sm:rounded-lg",
+          "relative z-10 flex h-[min(100dvh,100%)] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden rounded-none border border-line bg-surface shadow-modal",
+          isWorkspace
+            ? "sm:h-[calc(100vh-24px)] sm:max-h-[96vh] sm:rounded-lg"
+            : "sm:h-auto sm:max-h-[88vh] sm:rounded-lg",
           "transition-[opacity,transform] duration-[170ms] ease-out",
           entered ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.98] opacity-0",
           sizes[resolvedSize],
           className,
         )}
       >
-        <div className="flex shrink-0 items-start gap-3 px-5 py-5 sm:px-6">
+        <div className="flex shrink-0 items-start gap-3 px-5 py-4 sm:px-6">
           {Icon ? (
             <span
               className={cn(
@@ -214,7 +234,14 @@ export function Modal({
         </div>
 
         {children ? (
-          <div className="min-h-0 overflow-y-auto border-t border-line px-5 py-5 sm:px-6">{children}</div>
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto border-t border-line px-5 py-4 sm:px-6",
+              isWorkspace && "flex flex-col",
+            )}
+          >
+            {children}
+          </div>
         ) : null}
 
         {footer ? (

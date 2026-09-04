@@ -74,7 +74,7 @@ function deliveryTone(status: string): "active" | "failed" | "inactive" {
 export function AdminIntegrationsPage() {
   const { ready } = useAuth();
   const auth = useAdminAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -260,7 +260,7 @@ export function AdminIntegrationsPage() {
       await loadEmail();
       await loadDeliveries();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "İşlem tamamlanamadı.", "error");
+      toastError(err, "İşlem tamamlanamadı.");
       await loadEmail();
       if (err instanceof ApiError && err.message.includes("SMTP şifresi çözülemedi")) {
         openForm();

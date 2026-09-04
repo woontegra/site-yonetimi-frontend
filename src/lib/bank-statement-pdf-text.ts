@@ -442,14 +442,36 @@ export function extractPdfStatement(pages: PdfPageText[]): {
   const accountHints = adapter.extractAccountInfo(pages, fullText);
   const { transactions, skippedLines, multiLineMerged } = extractTransactionsFromPdfPages(pages);
   // Prefer adapter extract if it specializes later; generic uses same helper.
-  const txs = adapter.id === "generic" ? transactions : adapter.extractTransactions(pages);
+  let txs = adapter.id === "generic" ? transactions : adapter.extractTransactions(pages);
+  const MAX_TX = 5000;
+  if (txs.length > MAX_TX) {
+    txs = txs.slice(0, MAX_TX);
+  }
+  const balanceChain = validateBalanceChain(txs);
+
+  // Bakiye zinciri tutuyorsa veya ekstride hem gelen hem giden (işaretli tutar) varsa
+  // yön ayrımı güvenilirdir — her pozitif tutarı "şüpheli yön" sayma.
+  const hasCredit = txs.some((t) => t.direction === "CREDIT");
+  const hasDebit = txs.some((t) => t.direction === "DEBIT");
+  const directionReliable =
+    balanceChain.ok === true || (balanceChain.ok !== false && hasCredit && hasDebit);
+
+  if (directionReliable) {
+    for (const tx of txs) {
+      const before = tx.warnings.length;
+      tx.warnings = tx.warnings.filter((w) => w !== "Tutar yönü doğrulanmalı");
+      if (before > 0 && tx.warnings.length === 0 && tx.confidence !== "low") {
+        tx.confidence = "high";
+      }
+    }
+  }
+
   const warnings = [
     ...adapter.warnings(pages, txs),
     ...(adapter.id === "generic"
       ? ["PDF genel metin ayrıştırıcı ile okundu; bankaya özel doğrulama yapılmadı."]
       : []),
   ];
-  const balanceChain = validateBalanceChain(txs);
   if (balanceChain.message) warnings.push(balanceChain.message);
   return {
     adapter,

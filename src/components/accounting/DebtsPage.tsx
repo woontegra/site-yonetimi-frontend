@@ -86,7 +86,7 @@ function debtStatusLabel(debt: ApartmentDebt) {
 
 export function DebtsPage() {
   const { ready, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { hasSites, siteId } = useActiveSite();
 
@@ -268,7 +268,7 @@ export function DebtsPage() {
       setCancelling(null);
       await Promise.all([loadList(), loadMetrics()]);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Borç iptal edilemedi.", "error");
+      toastError(err, "Borç iptal edilemedi.");
     } finally {
       setCancelPending(false);
     }
@@ -293,7 +293,7 @@ export function DebtsPage() {
       setCollectDebt(debt);
       setCollectOpen(true);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Tahsilat formu açılamadı.", "error");
+      toastError(err, "Tahsilat formu açılamadı.");
     }
   }
 
@@ -368,7 +368,7 @@ export function DebtsPage() {
       </div>
 
       {indebtedApartments > 0 ? (
-        <SectionCard className="mb-5" title="Borç hatırlatması">
+        <SectionCard className="mb-5" tone="rose" title="Borç hatırlatması">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-ink">
               {indebtedApartments} dairenin ödenmemiş aidat borcu bulunuyor.

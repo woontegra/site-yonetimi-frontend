@@ -98,7 +98,7 @@ export function SiteDetailPage() {
   const { user } = useAuth();
   const tenantAuth = useApiAuth({ requireSite: false });
   const { setSiteId, refreshSites, siteId: activeSiteId, sites } = useActiveSite();
-  const { showToast } = useToast();
+  const { showToast, toastError } = useToast();
   const { openWizard } = useSiteSetupWizard();
   const canManage = canManageSites(user);
 
@@ -184,7 +184,7 @@ export function SiteDetailPage() {
     setFormError("");
     try {
       await updateSite(tenantAuth, site.id, formToSitePayload(values));
-      showToast("Site güncellendi.");
+      showToast("Site bilgileri güncellendi.");
       setFormOpen(false);
       await refreshSites();
       await load();
@@ -209,10 +209,10 @@ export function SiteDetailPage() {
       });
       if (editingBuilding) {
         await updateBuilding(authForSite, editingBuilding.id, payload);
-        showToast("Bina güncellendi.");
+        showToast("Bina bilgileri güncellendi.");
       } else {
         await createBuilding(authForSite, payload);
-        showToast("Bina oluşturuldu.");
+        showToast("Bina başarıyla oluşturuldu.");
       }
       setBuildingFormOpen(false);
       setEditingBuilding(null);
@@ -234,7 +234,7 @@ export function SiteDetailPage() {
       await loadBuildings();
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Bina silinemedi.", "error");
+      toastError(err, "Bina silinemedi.");
     }
   }
 
@@ -277,7 +277,7 @@ export function SiteDetailPage() {
       });
       await load();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Durum güncellenemedi.", "error");
+      toastError(err, "Durum güncellenemedi.");
     } finally {
       setStatusPending(false);
     }
@@ -311,7 +311,7 @@ export function SiteDetailPage() {
       });
       window.location.href = "/app/siteler";
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Site silinemedi.", "error");
+      toastError(err, "Site silinemedi.");
     } finally {
       setDeletePending(false);
     }

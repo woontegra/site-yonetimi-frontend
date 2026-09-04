@@ -46,7 +46,12 @@ export function SiteCard({
   const showWizard = canOpenWizard && onOpenWizard && setupNeedsAttention(site.setupStatus);
 
   return (
-    <SurfaceCard padding="none" className={cn("flex h-full flex-col overflow-hidden", className)}>
+    <SurfaceCard
+      padding="none"
+      tone="teal"
+      interactive
+      className={cn("flex h-full flex-col overflow-hidden", className)}
+    >
       <div className="flex items-start gap-3 border-b border-line px-5 py-4">
         <EntityIcon icon={Building2} />
         <div className="min-w-0 flex-1">
