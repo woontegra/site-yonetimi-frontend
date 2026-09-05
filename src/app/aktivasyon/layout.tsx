@@ -6,14 +6,7 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-export function headers() {
-  return {
-    "Cache-Control": "no-store, no-cache, must-revalidate, private",
-    Pragma: "no-cache",
-    "Referrer-Policy": "no-referrer",
-  };
-}
-
+/** Cache/Referrer güvenlik header’ları `middleware.ts` içinde `/aktivasyon` için set edilir. */
 export default function AktivasyonLayout({ children }: { children: React.ReactNode }) {
   return children;
 }
