@@ -770,6 +770,122 @@ export function reactivateAdminSubscription(auth: AdminAuth, tenantId: string, r
   });
 }
 
+export type AdminLicenseRequestStatus =
+  | "PENDING"
+  | "CONTACTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export type AdminLicenseRequest = {
+  id: string;
+  tenantId: string;
+  status: AdminLicenseRequestStatus;
+  note: string | null;
+  netPrice: number | null;
+  vatRate: number | null;
+  vatAmount: number | null;
+  grossPrice: number | null;
+  currency: string;
+  organizationName: string;
+  requesterName: string;
+  requesterEmail: string;
+  requesterPhone: string | null;
+  currentPlan: string | null;
+  currentEndsAt: string | null;
+  createdAt: string;
+  processedAt: string | null;
+  adminNote: string | null;
+  tenant?: { id: string; name: string };
+  requestedBy?: { id: string; fullName: string; email: string };
+  processedBy?: { id: string; fullName: string; email: string } | null;
+};
+
+export type AdminLicenseRequestList = {
+  page: number;
+  perPage: number;
+  total: number;
+  summary: {
+    pending: number;
+    contacted: number;
+    approved: number;
+    rejected: number;
+    cancelled: number;
+  };
+  items: AdminLicenseRequest[];
+};
+
+function qsLicense(params: Record<string, string | number | undefined>) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === "") continue;
+    sp.set(k, String(v));
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
+
+export function listAdminLicenseRequests(
+  auth: AdminAuth,
+  params: { page?: number; perPage?: number; search?: string; status?: string },
+) {
+  return apiRequest<AdminLicenseRequestList>(
+    `/api/admin/license-requests${qsLicense(params)}`,
+    auth,
+  );
+}
+
+export function getAdminLicenseRequest(auth: AdminAuth, id: string) {
+  return apiRequest<{
+    request: AdminLicenseRequest;
+    license: AdminSubscription | null;
+    conversionPreview: {
+      projectedEndsAt: string;
+      remainingDemoDaysPreserved: boolean;
+      price: { netPrice: number; vatRate: number; vatAmount: number; grossPrice: number; currency: string };
+    };
+  }>(`/api/admin/license-requests/${id}`, auth);
+}
+
+export function contactAdminLicenseRequest(auth: AdminAuth, id: string, body?: { adminNote?: string }) {
+  return apiRequest<{ request: AdminLicenseRequest }>(`/api/admin/license-requests/${id}/contacted`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export function approveAdminLicenseRequest(
+  auth: AdminAuth,
+  id: string,
+  body: { reason: string; netPrice?: number; paymentNote?: string },
+) {
+  return apiRequest<{ request: AdminLicenseRequest; subscription: AdminSubscription }>(
+    `/api/admin/license-requests/${id}/approve`,
+    {
+      ...auth,
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export function rejectAdminLicenseRequest(auth: AdminAuth, id: string, reason: string) {
+  return apiRequest<{ request: AdminLicenseRequest }>(`/api/admin/license-requests/${id}/reject`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function cancelAdminLicenseRequest(auth: AdminAuth, id: string, reason: string) {
+  return apiRequest<{ request: AdminLicenseRequest }>(`/api/admin/license-requests/${id}/cancel`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function listAdminIntegrations(
   auth: AdminAuth,
   params: { page?: number; perPage?: number; search?: string; status?: string },

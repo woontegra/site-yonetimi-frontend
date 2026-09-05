@@ -345,6 +345,14 @@ export function LicenseSettings() {
 
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line/70 pt-3">
               <StatusBadge active={!subscription.readOnly && subscription.status === "ACTIVE"} />
+              {!isPlatformAdmin &&
+              (subscription.plan === "DEMO" ||
+                subscription.status !== "ACTIVE" ||
+                subscription.remainingDays <= 30) ? (
+                <Link href="/app/lisans/yillik" className={settingsUi.btnSm}>
+                  Yıllık Lisansa Geç
+                </Link>
+              ) : null}
               {renewal ? (
                 <a href={renewal.href} target="_blank" rel="noreferrer" className={settingsUi.btnSm}>
                   {renewal.label}

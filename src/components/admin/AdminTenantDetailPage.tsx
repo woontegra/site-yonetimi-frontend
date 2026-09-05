@@ -67,7 +67,7 @@ import {
   listAdminTenantUsers,
   reactivateAdminSubscription,
   renewAdminAnnual,
-  resendAdminTenantNotification,
+  resendAdminUserInvite,
   startAdminAnnual,
   startAdminDemo,
   suspendAdminSubscription,
@@ -410,9 +410,12 @@ export function AdminTenantDetailPage() {
           <Button
             size="sm"
             variant="secondary"
-            disabled={pending}
+            disabled={pending || !tenant.owner?.id}
             onClick={() =>
-              void run(() => resendAdminTenantNotification(auth!, id), "Davet e-postası yeniden gönderildi.")
+              void run(
+                () => resendAdminUserInvite(auth!, tenant.owner!.id),
+                "Aktivasyon daveti yeniden gönderildi.",
+              )
             }
           >
             Davet E-postasını Yeniden Gönder

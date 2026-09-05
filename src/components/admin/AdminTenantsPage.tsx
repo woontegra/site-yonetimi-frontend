@@ -362,7 +362,11 @@ export function AdminTenantsPage() {
 
       <Modal
         open={Boolean(created)}
-        title="Tenant başarıyla oluşturuldu."
+        title={
+          created?.emails.welcome?.status === "SENT"
+            ? "Organizasyon oluşturuldu ve aktivasyon e-postası gönderildi."
+            : "Organizasyon oluşturuldu ancak aktivasyon e-postası gönderilemedi."
+        }
         onClose={() => setCreated(null)}
         footer={
           <>
@@ -380,7 +384,9 @@ export function AdminTenantsPage() {
                       const result = await resendAdminUserInvite(auth, created.tenant.owner.id);
                       setCreated({ ...created, emails: { ...created.emails, welcome: result.welcome } });
                       showToast(
-                        result.welcome?.status === "SENT" ? "Davet e-postası gönderildi." : "Davet e-postası gönderilemedi.",
+                        result.welcome?.status === "SENT"
+                          ? "Aktivasyon daveti gönderildi."
+                          : "Aktivasyon daveti gönderilemedi.",
                         result.welcome?.status === "SENT" ? "success" : "error",
                       );
                     } catch (err) {
@@ -391,7 +397,7 @@ export function AdminTenantsPage() {
                   })()
                 }
               >
-                Daveti Yeniden Gönder
+                Aktivasyon Davetini Yeniden Gönder
               </Button>
             ) : null}
             {created?.emails.platformNotification?.status !== "SENT" ? (
@@ -435,7 +441,14 @@ export function AdminTenantsPage() {
       >
         {created ? (
           <div className="space-y-2 text-sm">
-            <p><span className="text-muted">Organizasyon:</span> {created.tenant.name}</p>
+            <p>
+              <span className="text-muted">Organizasyon:</span> {created.tenant.name}
+            </p>
+            <p className="text-[12px] text-muted">
+              {created.emails.welcome?.status === "SENT"
+                ? "Yetkiliye aktivasyon e-postası gönderildi. Kullanıcı bağlantıdan kendi şifresini belirleyecektir."
+                : "Organizasyon, kullanıcı, üyelik ve lisans kaydı oluşturuldu. Aktivasyon e-postası gönderilemedi; daveti yeniden gönderebilirsiniz."}
+            </p>
             <p>
               <span className="text-muted">Kullanıcı bilgilendirme e-postası:</span>{" "}
               {deliveryLabel(created.emails.welcome)}

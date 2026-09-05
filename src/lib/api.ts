@@ -49,7 +49,16 @@ export async function apiPeekActivation(token: string): Promise<{
   expiresAt?: string;
 }> {
   if (!token) return { valid: false, reason: "invalid" };
-  const response = await fetch(`${API_URL}/api/auth/activation?token=${encodeURIComponent(token)}`);
+  // Token query string’de taşınmaz — yalnız POST body.
+  const response = await fetch(`${API_URL}/api/auth/activation/peek`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
+    body: JSON.stringify({ token }),
+    cache: "no-store",
+  });
   if (!response.ok) {
     return { valid: false, reason: "invalid" };
   }
@@ -65,8 +74,12 @@ export async function apiPeekActivation(token: string): Promise<{
 export async function apiActivate(token: string, password: string): Promise<void> {
   const response = await fetch(`${API_URL}/api/auth/activate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
     body: JSON.stringify({ token, password }),
+    cache: "no-store",
   });
   if (!response.ok) {
     let message = "Hesap etkinleştirilemedi.";

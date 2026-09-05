@@ -37,7 +37,7 @@ export type MyLicenseResponse = {
   organization?: { id: string; name: string } | null;
   usage?: { siteCount: number; userCount: number };
   licenseScope?: string;
-  support?: { email: string | null; renewalUrl: string | null };
+  support?: { email: string | null; renewalUrl: string | null; whatsapp?: string | null };
   state?: "HAS_LICENSE" | "NO_LICENSE";
   /** Yeni alan — backend tek kaynak. */
   license?: TenantSubscription | null;

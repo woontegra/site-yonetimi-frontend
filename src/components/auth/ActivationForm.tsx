@@ -1,8 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { Check, CircleAlert } from "lucide-react";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { AuthPasswordField } from "@/components/auth/AuthPasswordField";
@@ -26,6 +25,10 @@ const REASON_COPY: Record<string, { title: string; body: string }> = {
     title: "Hesap zaten etkin",
     body: "Bu hesap daha önce etkinleştirilmiş. Giriş ekranından devam edebilirsiniz.",
   },
+  stripped: {
+    title: "Bağlantı bu oturumda yok",
+    body: "Güvenli aktivasyon bağlantısı artık bu sayfada bulunmuyor. Lütfen e-postanızdaki bağlantıyı yeniden açın.",
+  },
 };
 
 function passwordChecks(password: string) {
@@ -36,9 +39,31 @@ function passwordChecks(password: string) {
   };
 }
 
+/** Hash (#token=) öncelikli; eski ?token= uyumluluğu. URL hemen temizlenir. */
+function takeActivationTokenFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+
+  let token = "";
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (hash) {
+    const hashParams = new URLSearchParams(hash);
+    token = (hashParams.get("token") ?? "").trim();
+  }
+  if (!token) {
+    const queryParams = new URLSearchParams(window.location.search);
+    token = (queryParams.get("token") ?? "").trim();
+  }
+
+  // Query + hash temizle; back ile tokenlı URL geri gelmesin.
+  window.history.replaceState(null, "", "/aktivasyon");
+
+  return token || null;
+}
+
 export function ActivationForm() {
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const tokenRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [valid, setValid] = useState(false);
   const [reason, setReason] = useState("invalid");
@@ -56,12 +81,18 @@ export function ActivationForm() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      const token = takeActivationTokenFromLocation();
       if (!token) {
-        setValid(false);
-        setReason("invalid");
-        setLoading(false);
+        if (!cancelled) {
+          tokenRef.current = null;
+          setValid(false);
+          setReason("stripped");
+          setLoading(false);
+        }
         return;
       }
+
+      tokenRef.current = token;
       const result = await apiPeekActivation(token);
       if (cancelled) return;
       setValid(result.valid);
@@ -74,11 +105,22 @@ export function ActivationForm() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, []);
+
+  function clearTokenMemory() {
+    tokenRef.current = null;
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (pending) return;
+    const token = tokenRef.current;
+    if (!token) {
+      setValid(false);
+      setReason("stripped");
+      setError("");
+      return;
+    }
     if (!checks.length || !checks.letter || !checks.number) {
       setError("Şifre en az 8 karakter olmalı ve harf ile rakam içermelidir.");
       return;
@@ -91,9 +133,15 @@ export function ActivationForm() {
     setError("");
     try {
       await apiActivate(token, password);
+      clearTokenMemory();
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Hesap etkinleştirilemedi.");
+      const message = err instanceof Error ? err.message : "Hesap etkinleştirilemedi.";
+      // Token değerini hata metnine asla ekleme.
+      setError(message.replace(/[A-Fa-f0-9]{32,}/g, "[redacted]"));
+      clearTokenMemory();
+      setValid(false);
+      setReason("invalid");
     } finally {
       setPending(false);
     }
@@ -154,7 +202,7 @@ export function ActivationForm() {
           {emailMasked ? ` · ${emailMasked}` : ""}
         </p>
       ) : null}
-      <form onSubmit={(event) => void onSubmit(event)} className="space-y-1">
+      <form onSubmit={(event) => void onSubmit(event)} className="space-y-1" autoComplete="off">
         <FormField label="Yeni şifre" htmlFor="activate-password" required>
           <AuthPasswordField
             id="activate-password"
@@ -188,7 +236,11 @@ export function ActivationForm() {
           />
         </FormField>
         {error ? <p className="pb-2 text-sm text-danger">{error}</p> : null}
-        <button type="submit" disabled={pending} className="auth-submit mt-1 flex w-full items-center justify-center gap-2 text-sm font-medium text-white disabled:opacity-70">
+        <button
+          type="submit"
+          disabled={pending}
+          className="auth-submit mt-1 flex w-full items-center justify-center gap-2 text-sm font-medium text-white disabled:opacity-70"
+        >
           {pending ? (
             <>
               <span className="auth-spinner" aria-hidden />

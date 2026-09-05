@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { AdminLicenseRequestsPanel } from "@/components/admin/AdminLicenseRequestsPanel";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Select } from "@/components/ui/Select";
@@ -42,6 +43,7 @@ import {
   previewExtendBaseIso,
   previewRemainingCalendarDays,
 } from "@/lib/license-dates";
+import { cn } from "@/lib/cn";
 
 const PER_PAGE = 20;
 const ANNUAL_NET = 4000;
@@ -96,6 +98,8 @@ export function AdminSubscriptionsPage() {
   const auth = useAdminAuth();
   const searchParams = useSearchParams();
   const { showToast, toastError } = useToast();
+  const initialTab = searchParams.get("tab") === "requests" ? "requests" : "licenses";
+  const [tab, setTab] = useState<"licenses" | "requests">(initialTab);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>((searchParams.get("filter") as FilterKey) || "");
   const [page, setPage] = useState(1);
@@ -238,17 +242,49 @@ export function AdminSubscriptionsPage() {
       <PageHeader
         title="Lisans Yönetimi"
         description="Organizasyon düzeyinde Demo ve Yıllık lisans işlemleri."
-        search={<SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Organizasyon adı" />}
-        actions={
-          <Select value={filter} onChange={(e) => setFilter(e.target.value as FilterKey)} className="w-44">
-            {FILTERS.map((item) => (
-              <option key={item.key || "all"} value={item.key}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
-        }
       />
+
+      <div className="mb-4 flex flex-wrap gap-1 border-b border-line pb-px">
+        <button
+          type="button"
+          className={cn(
+            "-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition-colors",
+            tab === "licenses"
+              ? "border-accent text-ink"
+              : "border-transparent text-muted hover:text-ink",
+          )}
+          onClick={() => setTab("licenses")}
+        >
+          Lisanslar
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition-colors",
+            tab === "requests"
+              ? "border-accent text-ink"
+              : "border-transparent text-muted hover:text-ink",
+          )}
+          onClick={() => setTab("requests")}
+        >
+          Lisans Talepleri
+        </button>
+      </div>
+
+      {tab === "requests" ? <AdminLicenseRequestsPanel /> : null}
+
+      {tab === "licenses" ? (
+        <>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Organizasyon adı" className="max-w-xs" />
+        <Select value={filter} onChange={(e) => setFilter(e.target.value as FilterKey)} className="w-44">
+          {FILTERS.map((item) => (
+            <option key={item.key || "all"} value={item.key}>
+              {item.label}
+            </option>
+          ))}
+        </Select>
+      </div>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
         <StatCard label="Demo" value={String(summary?.demo ?? summary?.demoActive ?? "—")} />
@@ -503,6 +539,8 @@ export function AdminSubscriptionsPage() {
           </FormField>
         </div>
       </Modal>
+        </>
+      ) : null}
     </PageContainer>
   );
 }
