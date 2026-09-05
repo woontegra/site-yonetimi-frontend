@@ -140,7 +140,7 @@ export function FeedbackCategoriesModal({
       <div className="space-y-4">
         <div className="flex gap-2">
           <Input
-            className="h-10 flex-1"
+            className="flex-1"
             placeholder="Yeni kategori adı"
             value={name}
             onChange={(event) => setName(event.target.value)}

@@ -395,7 +395,7 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
                     {channelBadge(id)}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-ink">{MESSAGE_CHANNEL_LABELS[id]}</p>
+                    <p className="text-[13px] font-medium text-ink">{MESSAGE_CHANNEL_LABELS[id]}</p>
                     <p className="mt-1 text-[13px] text-muted">{MESSAGE_CHANNEL_HINTS[id]}</p>
                   </div>
                 </button>
@@ -629,19 +629,19 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-[10px] border border-line px-3 py-3">
                 <p className="text-[12px] text-muted">Hazırlanan</p>
-                <p className="mt-1 text-lg font-semibold text-ink">
+                <p className="mt-1 text-stat text-ink">
                   {result.summary.preparedCount}
                 </p>
               </div>
               <div className="rounded-[10px] border border-line px-3 py-3">
                 <p className="text-[12px] text-muted">Gönderilen</p>
-                <p className="mt-1 text-lg font-semibold text-success">
+                <p className="mt-1 text-stat text-success">
                   {result.summary.sentCount}
                 </p>
               </div>
               <div className="rounded-[10px] border border-line px-3 py-3">
                 <p className="text-[12px] text-muted">Başarısız</p>
-                <p className="mt-1 text-lg font-semibold text-danger">
+                <p className="mt-1 text-stat text-danger">
                   {result.summary.failedCount}
                 </p>
               </div>
@@ -649,7 +649,7 @@ export function DebtReminderSendModal({ open, onClose }: DebtReminderSendModalPr
 
             {failedMessages.length > 0 ? (
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">Başarısız mesajlar</h3>
+                <h3 className="mb-2 text-[13px] font-medium text-ink">Başarısız mesajlar</h3>
                 <Table>
                   <TableElement>
                     <THead>

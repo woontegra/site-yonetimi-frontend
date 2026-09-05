@@ -50,12 +50,37 @@ export type PaymentPayload = {
   referenceNo?: string;
   description?: string;
   allocations: Array<{ apartmentDebtId: string; amount: number }>;
+  confirmedWarningCodes?: string[];
+  expectedRemainings?: Array<{ apartmentDebtId: string; remainingAmount: number }>;
 };
 
-export type MonthlyPaymentSummary = {
-  year: number;
-  months: Array<{ month: number; total: string }>;
-  currentMonthTotal: string;
+export type FinanceCheckResult = {
+  allowed: boolean;
+  requiresConfirmation: boolean;
+  issues: Array<{
+    code: string;
+    severity: "INFO" | "WARNING" | "BLOCK";
+    title: string;
+    message: string;
+    apartmentId?: string;
+    debtId?: string;
+    paymentId?: string;
+    period?: string | null;
+    amount?: string;
+    details?: Record<string, unknown>;
+  }>;
+  summary: Record<string, unknown>;
+  proposedAllocation: Array<{
+    apartmentDebtId: string;
+    title: string;
+    periodYear: number | null;
+    periodMonth: number | null;
+    periodLabel: string | null;
+    amount: string;
+    remainingBefore: string;
+    remainingAfter: string;
+  }>;
+  debtSnapshot: Array<{ apartmentDebtId: string; remainingAmount: string }>;
 };
 
 type AuthContext = { token: string; tenantId: string; siteId?: string | null };
@@ -102,6 +127,23 @@ export function createPayment(auth: AuthContext, payload: PaymentPayload, idempo
   });
 }
 
+export function previewPayment(auth: AuthContext, payload: Partial<PaymentPayload> & {
+  apartmentId: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: PaymentMethod;
+}) {
+  return apiRequest<{ check: FinanceCheckResult }>("/api/payments/preview", {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function previewPaymentCancel(auth: AuthContext, id: string) {
+  return apiRequest<{ check: FinanceCheckResult }>(`/api/payments/${id}/cancel-preview`, auth);
+}
+
 export function cancelPayment(auth: AuthContext, id: string) {
   return apiRequest<{ payment: Payment }>(`/api/payments/${id}`, {
     ...auth,
@@ -113,3 +155,9 @@ export function getMonthlyPaymentSummary(auth: AuthContext, year?: number) {
   const query = year ? `?year=${year}` : "";
   return apiRequest<MonthlyPaymentSummary>(`/api/payments/summary/monthly${query}`, auth);
 }
+
+export type MonthlyPaymentSummary = {
+  year: number;
+  months: Array<{ month: number; total: string }>;
+  currentMonthTotal: string;
+};

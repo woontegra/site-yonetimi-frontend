@@ -14,8 +14,8 @@ type SurfaceCardProps = {
 
 const paddingClass = {
   none: "",
-  sm: "px-5 py-4",
-  md: "p-5 sm:p-6",
+  sm: "px-3.5 py-3",
+  md: "p-3.5 sm:p-4",
 };
 
 export function SurfaceCard({
@@ -68,25 +68,27 @@ export function SectionCard({
     <SurfaceCard padding="none" tone={tone} className={cn("flex h-full flex-col", className)}>
       <div
         className={cn(
-          "flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6",
+          "flex flex-col gap-2 border-b px-3.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-4",
           tones.header,
         )}
       >
-        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
           {Icon ? (
             <span
               className={cn(
-                "mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg sm:size-11",
+                "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
                 tones.icon,
               )}
             >
-              <Icon className="size-5" aria-hidden />
+              <Icon className="size-4" aria-hidden />
             </span>
           ) : null}
           <div className="min-w-0">
             <h2 className="break-words text-section text-ink">{title}</h2>
             {description ? (
-              <p className="mt-1 break-words text-sm text-muted">{description}</p>
+              <p className="mt-0.5 break-words text-[12px] font-normal leading-[1.35] text-muted">
+                {description}
+              </p>
             ) : null}
           </div>
         </div>
@@ -96,7 +98,7 @@ export function SectionCard({
           </div>
         ) : null}
       </div>
-      <div className={cn("flex-1 px-5 py-5 sm:px-6", bodyClassName)}>{children}</div>
+      <div className={cn("flex-1 px-3.5 py-3.5 sm:px-4", bodyClassName)}>{children}</div>
     </SurfaceCard>
   );
 }
@@ -123,23 +125,23 @@ export function StatCard({
   const tones = cardTone(tone);
   const body = (
     <>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5">
         <p className="text-caption font-medium text-muted">{label}</p>
         {Icon ? (
           <span
             className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11",
+              "flex size-8 shrink-0 items-center justify-center rounded-lg",
               tones.icon,
             )}
           >
-            <Icon className="size-5" aria-hidden />
+            <Icon className="size-4" aria-hidden />
           </span>
         ) : null}
       </div>
-      <p className="mt-3 break-words text-[1.35rem] font-semibold leading-tight tracking-tight text-ink sm:text-[1.5rem] sm:leading-none">
+      <p className="mt-2 break-words text-stat leading-tight tracking-tight text-ink">
         {value}
       </p>
-      {hint ? <p className="mt-1.5 break-words text-caption text-muted">{hint}</p> : null}
+      {hint ? <p className="mt-1 break-words text-caption text-muted">{hint}</p> : null}
     </>
   );
 
@@ -149,10 +151,10 @@ export function StatCard({
         type="button"
         onClick={onClick}
         className={cn(
-          "min-w-0 rounded-xl border text-left transition-colors",
+          "min-w-0 rounded-lg border text-left transition-colors",
           tones.surface,
           tones.hover,
-          "px-4 py-3",
+          "px-3.5 py-3",
           className,
         )}
       >
@@ -179,9 +181,9 @@ type MetricTileProps = {
 export function MetricTile({ label, value, tone = "neutral", className }: MetricTileProps) {
   const tones = cardTone(tone);
   return (
-    <div className={cn("min-w-0 rounded-lg px-3 py-2.5", tones.metric, className)}>
+    <div className={cn("min-w-0 rounded-lg px-3 py-2", tones.metric, className)}>
       <p className="text-caption font-medium text-muted">{label}</p>
-      <p className="mt-1 min-w-0 break-words text-sm font-semibold tracking-tight text-ink">
+      <p className="mt-0.5 min-w-0 break-words text-[13px] font-medium tracking-tight text-ink">
         {value}
       </p>
     </div>

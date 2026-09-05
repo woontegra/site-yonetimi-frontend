@@ -121,7 +121,7 @@ export function DropdownItem({
   disabled?: boolean;
 }) {
   const className = cn(
-    "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors duration-micro",
+    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors duration-micro",
     danger ? "text-danger hover:bg-red-50" : "text-ink hover:bg-canvas",
     disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
   );

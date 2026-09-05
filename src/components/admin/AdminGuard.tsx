@@ -17,11 +17,18 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   }, [ready, user.isPlatformAdmin, router, pathname]);
 
   if (!ready) {
-    return <div className="px-6 py-10 text-sm text-muted">Yükleniyor…</div>;
+    return <div className="px-6 py-10 text-[13px] text-muted">Yükleniyor…</div>;
   }
 
   if (!user.isPlatformAdmin) {
-    return <div className="px-6 py-10 text-sm text-muted">Bu alana erişim yetkiniz yok.</div>;
+    return (
+      <div className="px-6 py-10">
+        <p className="text-[14px] font-medium text-ink">Erişim reddedildi (403)</p>
+        <p className="mt-1 text-[12px] text-muted">
+          Bu işlem için platform yönetici yetkisi gerekiyor.
+        </p>
+      </div>
+    );
   }
 
   return <>{children}</>;

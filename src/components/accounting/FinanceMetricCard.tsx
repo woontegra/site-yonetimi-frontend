@@ -34,20 +34,18 @@ export function FinanceMetricCard({
 
   return (
     <SurfaceCard padding="sm" tone={resolved} className="min-w-0">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5">
         <p className="text-caption font-medium text-muted">{label}</p>
         <span
           className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            "flex size-8 shrink-0 items-center justify-center rounded-lg",
             tones.icon,
           )}
         >
-          <Icon className="size-4" aria-hidden />
+          <Icon className="size-3.5" aria-hidden />
         </span>
       </div>
-      <p className="mt-2 text-right break-words text-[1.2rem] font-semibold leading-tight tracking-tight text-ink sm:text-[1.3rem]">
-        {value}
-      </p>
+      <p className="mt-1.5 text-right break-words text-stat tracking-tight text-ink">{value}</p>
     </SurfaceCard>
   );
 }

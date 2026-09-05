@@ -164,7 +164,7 @@ export function SuppliersPage() {
         actions={
           <>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
             >

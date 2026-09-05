@@ -145,7 +145,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
       <div className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <Input
-            className="h-10 flex-1"
+            className="flex-1"
             placeholder="Yeni kategori adı"
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -158,7 +158,7 @@ export function AssetCategoriesModal({ open, auth, onClose, onChanged }: AssetCa
             aria-label="Kategori adı"
           />
           <Input
-            className="h-10 flex-1"
+            className="flex-1"
             placeholder="Açıklama (opsiyonel)"
             value={description}
             onChange={(event) => setDescription(event.target.value)}

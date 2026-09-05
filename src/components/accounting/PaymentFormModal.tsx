@@ -21,7 +21,13 @@ import { listApartmentDebts, type ApartmentDebt } from "@/lib/debts-api";
 import { formatDateTr, formatMoney, PAYMENT_METHOD_LABELS } from "@/lib/money";
 import { RELATION_TYPE_LABELS, todayInputValue } from "@/lib/person-constants";
 import { listPersons, type PersonListItem } from "@/lib/persons-api";
-import type { PaymentMethod, PaymentPayload } from "@/lib/payments-api";
+import type { PaymentMethod, PaymentPayload, FinanceCheckResult } from "@/lib/payments-api";
+import { previewPayment } from "@/lib/payments-api";
+import {
+  FinanceCheckPanel,
+  hasUnresolvedFinanceBlocks,
+  hasUnresolvedFinanceWarnings,
+} from "@/components/accounting/FinanceCheckPanel";
 import { listRelations } from "@/lib/relations-api";
 
 const OTHER_PAYER = "__other__";
@@ -117,6 +123,9 @@ export function PaymentFormModal({
   const [loadedPersons, setLoadedPersons] = useState<PersonListItem[]>([]);
   const [loadedRelated, setLoadedRelated] = useState<RelatedPerson[]>([]);
   const [loadingContext, setLoadingContext] = useState(false);
+  const [financeCheck, setFinanceCheck] = useState<FinanceCheckResult | null>(null);
+  const [confirmedWarningCodes, setConfirmedWarningCodes] = useState<string[]>([]);
+  const [previewPending, setPreviewPending] = useState(false);
 
   const handleClose = useCallback(() => {
     if (!pending) onClose();
@@ -400,6 +409,15 @@ export function PaymentFormModal({
         ...(values.referenceNo.trim() ? { referenceNo: values.referenceNo.trim() } : {}),
         ...(description ? { description } : {}),
         allocations,
+        ...(confirmedWarningCodes.length > 0 ? { confirmedWarningCodes } : {}),
+        ...(financeCheck?.debtSnapshot?.length
+          ? {
+              expectedRemainings: financeCheck.debtSnapshot.map((item) => ({
+                apartmentDebtId: item.apartmentDebtId,
+                remainingAmount: Number(item.remainingAmount),
+              })),
+            }
+          : {}),
       },
       resolvedSiteId,
     );
@@ -431,6 +449,76 @@ export function PaymentFormModal({
       .filter((item) => item.allocated > 0);
   }, [openDebts, values.allocations]);
 
+  useEffect(() => {
+    if (!open) {
+      setFinanceCheck(null);
+      setConfirmedWarningCodes([]);
+      return;
+    }
+    const resolvedApartmentId = locked ? openDebts[0]?.apartment.id : apartmentId;
+    const resolvedSiteId = apartmentContext?.siteId || siteId;
+    const amount = Number(values.amount.replace(",", "."));
+    if (
+      !auth ||
+      !resolvedSiteId ||
+      !resolvedApartmentId ||
+      !values.paymentDate ||
+      !values.paymentMethod ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      setFinanceCheck(null);
+      return;
+    }
+
+    const allocations = openDebts
+      .map((debt) => ({
+        apartmentDebtId: debt.id,
+        amount: Number((values.allocations[debt.id] ?? "0").replace(",", ".")),
+      }))
+      .filter((item) => item.amount > 0);
+
+    const timer = window.setTimeout(() => {
+      setPreviewPending(true);
+      void previewPayment(
+        { ...auth, siteId: resolvedSiteId },
+        {
+          apartmentId: resolvedApartmentId,
+          amount,
+          paymentDate: values.paymentDate,
+          paymentMethod: values.paymentMethod as PaymentMethod,
+          ...(values.personId ? { personId: values.personId } : {}),
+          ...(values.referenceNo.trim() ? { referenceNo: values.referenceNo.trim() } : {}),
+          ...(allocations.length > 0 ? { allocations } : {}),
+          confirmedWarningCodes,
+        },
+      )
+        .then((result) => setFinanceCheck(result.check))
+        .catch(() => setFinanceCheck(null))
+        .finally(() => setPreviewPending(false));
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    open,
+    auth,
+    locked,
+    openDebts,
+    apartmentId,
+    apartmentContext?.siteId,
+    siteId,
+    values.amount,
+    values.paymentDate,
+    values.paymentMethod,
+    values.personId,
+    values.referenceNo,
+    values.allocations,
+    confirmedWarningCodes,
+  ]);
+
+  const financeBlocked = hasUnresolvedFinanceBlocks(financeCheck);
+  const financeNeedsConfirm = hasUnresolvedFinanceWarnings(financeCheck, confirmedWarningCodes);
+
   return (
     <FormModal
       open={open}
@@ -450,14 +538,23 @@ export function PaymentFormModal({
           <Button
             type="submit"
             form="payment-form"
-            disabled={pending || openDebts.length === 0 || loadingContext}
+            disabled={
+              pending ||
+              previewPending ||
+              openDebts.length === 0 ||
+              loadingContext ||
+              financeBlocked ||
+              financeNeedsConfirm
+            }
           >
             {pending ? (
               "Kaydediliyor..."
             ) : (
               <>
                 <Check className="size-4" aria-hidden />
-                Tahsilatı Kaydet
+                {allocationPreview.length > 1
+                  ? `Tahsilatı Kaydet (${allocationPreview.length} borca dağıt)`
+                  : "Tahsilatı Kaydet"}
               </>
             )}
           </Button>
@@ -810,6 +907,20 @@ export function PaymentFormModal({
           </FormField>
         </FormSection>
 
+        <FinanceCheckPanel
+          check={financeCheck}
+          confirmedCodes={confirmedWarningCodes}
+          hideAllocationPlan
+          onConfirmCode={(code, confirmed) => {
+            setConfirmedWarningCodes((current) =>
+              confirmed
+                ? current.includes(code)
+                  ? current
+                  : [...current, code]
+                : current.filter((item) => item !== code),
+            );
+          }}
+        />
         {error ? <p className="text-[13px] text-danger">{error}</p> : null}
       </form>
     </FormModal>

@@ -10,12 +10,10 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const PLAN_LABELS: Record<string, string> = {
   DEMO: "Demo",
-  STANDARD: "Standart",
-  PROFESSIONAL: "Profesyonel",
+  ANNUAL: "Yıllık",
 };
 
 export const SUB_STATUS_LABELS: Record<string, string> = {
-  TRIAL: "Deneme",
   ACTIVE: "Aktif",
   EXPIRED: "Süresi doldu",
   SUSPENDED: "Askıda",
@@ -50,6 +48,10 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "tenant.create": "Tenant oluşturuldu",
   "tenant.delete": "Tenant kalıcı olarak silindi",
   "subscription.extend": "Abonelik uzatıldı",
+  "subscription.demo_start": "Demo lisansı başlatıldı",
+  "subscription.convert_annual": "Yıllık lisansa dönüştürüldü",
+  "subscription.renew": "Yıllık lisans yenilendi",
+  "subscription.cancel": "Abonelik iptal edildi",
   "subscription.trial": "Deneme süresi verildi",
   "subscription.plan_change": "Plan değiştirildi",
   "subscription.suspend": "Abonelik askıya alındı",
@@ -82,17 +84,20 @@ export function roleLabel(role: string | null | undefined): string {
   return ROLE_LABELS[role] ?? role;
 }
 
-export function subscriptionTone(status: string | undefined): BadgeTone {
-  if (status === "ACTIVE") return "success";
-  if (status === "TRIAL") return "info";
-  if (status === "EXPIRED") return "neutral";
+export function subscriptionTone(status: string | undefined, plan?: string): BadgeTone {
+  if (status === "EXPIRED") return "danger";
   if (status === "SUSPENDED") return "warning";
   if (status === "CANCELLED") return "danger";
+  if (status === "ACTIVE") {
+    if (plan === "DEMO") return "info";
+    if (plan === "ANNUAL") return "success";
+    return "success";
+  }
   return "neutral";
 }
 
 export function remainingLabel(sub: AdminSubscription | null | undefined): string | null {
   if (!sub) return null;
-  if (sub.remainingDays < 0) return "Süresi doldu";
+  if (sub.isExpired || sub.remainingDays < 0) return "Süresi doldu";
   return `${sub.remainingDays} gün kaldı`;
 }

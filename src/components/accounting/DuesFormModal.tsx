@@ -1224,7 +1224,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-line bg-canvas px-3 py-2.5">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+      <p className="mt-1 text-[13px] font-medium text-ink">{value}</p>
     </div>
   );
 }

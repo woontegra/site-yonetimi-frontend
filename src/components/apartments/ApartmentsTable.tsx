@@ -237,7 +237,7 @@ export function ApartmentsTable({
                   <div>
                     <Link
                       href={`/app/daireler/${apartment.id}`}
-                      className="text-sm font-semibold text-ink hover:text-brand"
+                      className="text-[13px] font-medium text-ink hover:text-brand"
                     >
                       {apartment.building.name} · Daire {apartment.number}
                     </Link>

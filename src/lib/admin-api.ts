@@ -1,18 +1,54 @@
-import { apiRequest } from "@/lib/http";
+import { apiRequest, ApiError } from "@/lib/http";
 
 type AdminAuth = { token: string };
 
 export type AdminSubscription = {
   id: string;
-  plan: "DEMO" | "STANDARD" | "PROFESSIONAL";
-  status: "TRIAL" | "ACTIVE" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
+  plan: "DEMO" | "ANNUAL";
+  status: "ACTIVE" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
+  storedStatus?: "ACTIVE" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
   startsAt: string;
   endsAt: string;
-  trialEndsAt: string | null;
   cancelledAt: string | null;
   remainingDays: number;
   note: string | null;
   updatedAt?: string;
+  netPrice?: number | null;
+  vatRate?: number | null;
+  vatAmount?: number | null;
+  grossPrice?: number | null;
+  currency?: string | null;
+  readOnly?: boolean;
+  isExpired?: boolean;
+  version?: number;
+};
+
+export type AdminSubscriptionSummary = {
+  total?: number;
+  activeDemo?: number;
+  activeAnnual?: number;
+  expiringSoon?: number;
+  expired?: number;
+  suspended?: number;
+  cancelled?: number;
+  withoutLicense?: number;
+  // FE fallback aliases
+  demo?: number;
+  annual?: number;
+  active?: number;
+  expiring?: number;
+  none?: number;
+  demoActive?: number;
+  annualActive?: number;
+};
+
+export type AdminSubscriptionHistoryItem = {
+  id: string;
+  action: string;
+  reason: string | null;
+  createdAt: string;
+  adminUser: { id: string; fullName: string; email: string } | null;
+  metadata?: unknown;
 };
 
 export type AdminOwner = { id: string; fullName: string; email: string } | null;
@@ -28,14 +64,34 @@ export type AdminOverview = {
   metrics: {
     totalTenants: number;
     activeTenants: number;
+    suspendedTenants?: number;
     totalSites: number;
     totalApartments: number;
     totalUsers: number;
+    activeUsers?: number;
+    inactiveUsers?: number;
+    usersActive30d?: number;
     trialSubscriptions: number;
     activeSubscriptions: number;
+    expiredSubscriptions?: number;
+    suspendedSubscriptions?: number;
     whatsappConnected: number;
+    whatsappError?: number;
     expiringSubscriptions: number;
+    expiringCritical7d?: number;
+    tenantsWithoutUsers?: number;
+    tenantsWithoutSubscription?: number;
+    failedEmailDeliveries?: number;
+    failedMessages?: number;
   };
+  alerts?: Array<{
+    code: string;
+    severity: "warning" | "danger";
+    title: string;
+    description: string;
+    href: string;
+    count: number;
+  }>;
   recentTenants: Array<{
     id: string;
     name: string;
@@ -44,6 +100,8 @@ export type AdminOverview = {
     subscription: AdminSubscription | null;
   }>;
   expiringSubscriptions: Array<AdminSubscription & { tenant: { id: string; name: string; isActive: boolean } }>;
+  criticalExpiring?: Array<AdminSubscription & { tenant: { id: string; name: string; isActive: boolean } }>;
+  expiredButActive?: Array<AdminSubscription & { tenant: { id: string; name: string; isActive: boolean } }>;
   errorIntegrations: Array<{
     id: string;
     tenantId: string;
@@ -112,6 +170,7 @@ export type AdminUserListItem = {
   fullName: string;
   email: string;
   isActive: boolean;
+  isPlatformAdmin?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   role: string | null;
@@ -119,18 +178,83 @@ export type AdminUserListItem = {
   subscription: AdminSubscription | null;
 };
 
+export type AdminUserMembership = {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  tenantIsActive: boolean;
+  role: string;
+  status: string;
+  allSites: boolean;
+  invitedAt: string | null;
+  createdAt: string;
+  siteAccesses: Array<{ siteId: string; siteName: string; isActive: boolean }>;
+};
+
 export type AdminUserDetail = {
   id: string;
   fullName: string;
   email: string;
   isActive: boolean;
+  isPlatformAdmin: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  updatedAt: string;
   role: string | null;
+  membershipStatus: string | null;
+  activationPending: boolean;
+  activationExpiresAt: string | null;
+  interventionStatus: "normal" | "passive" | "activation_pending" | "org_blocked";
+  accessBlocks: string[];
   tenant: { id: string; name: string; isActive: boolean; siteCount: number } | null;
   subscription: AdminSubscription | null;
-  memberships: Array<{ tenantId: string; tenantName: string; role: string }>;
-  usage: { sites: number; messages: number };
+  licenseScope: "organization";
+  memberships: AdminUserMembership[];
+  primaryAccess: {
+    membershipId: string;
+    allSites: boolean;
+    siteCount: number;
+    sites: Array<{ siteId: string; siteName: string; isActive: boolean }>;
+    primarySiteName: string | null;
+  } | null;
+  usage: {
+    tenantSites: number;
+    tenantMessages: number;
+    activityLast30d: number;
+    failedEmails: number;
+  };
+};
+
+export type AdminUserActivityItem = {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  tenantId: string;
+  tenantName: string;
+  createdAt: string;
+  result: "success";
+};
+
+export type AdminUserCommunicationItem = {
+  id: string;
+  channel: "EMAIL";
+  type: string;
+  subject: string;
+  status: string;
+  recipientEmail: string;
+  errorCode: string | null;
+  errorSummary: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  attemptCount: number;
+};
+
+export type AdminUserDeletePreview = {
+  user: { id: string; fullName: string; email: string };
+  canDelete: boolean;
+  blockers: string[];
+  counts: Record<string, number>;
 };
 
 export type AdminSiteListItem = {
@@ -303,7 +427,7 @@ export function deleteAdminTenant(auth: AdminAuth, id: string, confirmName: stri
 export function extendAdminTenantSubscription(
   auth: AdminAuth,
   id: string,
-  body: { days?: number; endsAt?: string; plan?: string },
+  body: { days?: number; endsAt?: string; plan?: string; reason: string },
 ) {
   return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/tenants/${id}/subscription/extend`, {
     ...auth,
@@ -312,11 +436,11 @@ export function extendAdminTenantSubscription(
   });
 }
 
-export function trialAdminTenantSubscription(auth: AdminAuth, id: string, days: number) {
+export function trialAdminTenantSubscription(auth: AdminAuth, id: string, days: number, reason: string) {
   return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/tenants/${id}/subscription/trial`, {
     ...auth,
     method: "POST",
-    body: JSON.stringify({ days }),
+    body: JSON.stringify({ days, reason }),
   });
 }
 
@@ -342,12 +466,92 @@ export function getAdminUser(auth: AdminAuth, id: string) {
   return apiRequest<{ user: AdminUserDetail }>(`/api/admin/users/${id}`, auth);
 }
 
+export function updateAdminUser(auth: AdminAuth, id: string, body: { fullName: string }) {
+  return apiRequest<{ user: { id: string; fullName: string; email: string } }>(`/api/admin/users/${id}`, {
+    ...auth,
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminUserAccess(
+  auth: AdminAuth,
+  id: string,
+  body: { membershipId: string; role?: string; allSites?: boolean; siteIds?: string[] },
+) {
+  return apiRequest<{ ok: true }>(`/api/admin/users/${id}/access`, {
+    ...auth,
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listAdminUserAccess(auth: AdminAuth, id: string) {
+  return apiRequest<{
+    memberships: AdminUserMembership[];
+    primaryAccess: AdminUserDetail["primaryAccess"];
+  }>(`/api/admin/users/${id}/access`, auth);
+}
+
+export function listAdminUserTenantSites(auth: AdminAuth, id: string) {
+  return apiRequest<{ items: Array<{ id: string; name: string; isActive: boolean }> }>(
+    `/api/admin/users/${id}/tenant-sites`,
+    auth,
+  );
+}
+
+export function listAdminUserActivity(
+  auth: AdminAuth,
+  id: string,
+  params?: { page?: number; perPage?: number; search?: string },
+) {
+  return apiRequest<AdminPaged<AdminUserActivityItem> & { coverageNote?: string }>(
+    `/api/admin/users/${id}/activity${qs(params ?? {})}`,
+    auth,
+  );
+}
+
+export function listAdminUserCommunications(
+  auth: AdminAuth,
+  id: string,
+  params?: { page?: number; perPage?: number },
+) {
+  return apiRequest<AdminPaged<AdminUserCommunicationItem>>(
+    `/api/admin/users/${id}/communications${qs(params ?? {})}`,
+    auth,
+  );
+}
+
+export function listAdminUserNotes(auth: AdminAuth, id: string) {
+  return apiRequest<{
+    items: AdminNote[];
+    scope: "organization" | "none";
+    note?: string;
+  }>(`/api/admin/users/${id}/notes`, auth);
+}
+
 export function activateAdminUser(auth: AdminAuth, id: string) {
   return apiRequest(`/api/admin/users/${id}/activate`, { ...auth, method: "POST" });
 }
 
-export function deactivateAdminUser(auth: AdminAuth, id: string) {
-  return apiRequest(`/api/admin/users/${id}/deactivate`, { ...auth, method: "POST" });
+export function deactivateAdminUser(auth: AdminAuth, id: string, reason: string) {
+  return apiRequest(`/api/admin/users/${id}/deactivate`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function previewAdminUserDelete(auth: AdminAuth, id: string) {
+  return apiRequest<AdminUserDeletePreview>(`/api/admin/users/${id}/delete-preview`, auth);
+}
+
+export function deleteAdminUser(auth: AdminAuth, id: string, body: { reason: string; confirmEmail: string }) {
+  return apiRequest<{ message: string }>(`/api/admin/users/${id}`, {
+    ...auth,
+    method: "DELETE",
+    body: JSON.stringify(body),
+  });
 }
 
 export function createAdminUserNote(auth: AdminAuth, id: string, content: string) {
@@ -375,12 +579,157 @@ export function getAdminSite(auth: AdminAuth, id: string) {
 
 export function listAdminSubscriptions(
   auth: AdminAuth,
-  params: { page?: number; perPage?: number; search?: string; status?: string },
+  params: { page?: number; perPage?: number; search?: string; status?: string; plan?: string; filter?: string },
 ) {
   return apiRequest<AdminPaged<AdminSubscriptionListItem>>(`/api/admin/subscriptions${qs(params)}`, auth);
 }
 
-export function extendAdminSubscription(auth: AdminAuth, tenantId: string, body: { days?: number; endsAt?: string }) {
+export async function getAdminSubscriptionSummary(auth: AdminAuth): Promise<AdminSubscriptionSummary> {
+  try {
+    return await apiRequest<AdminSubscriptionSummary>("/api/admin/subscriptions/summary", auth);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      const list = await listAdminSubscriptions(auth, { page: 1, perPage: 200 });
+      return summarizeSubscriptions(list.items);
+    }
+    throw err;
+  }
+}
+
+function summarizeSubscriptions(items: AdminSubscriptionListItem[]): AdminSubscriptionSummary {
+  const summary: AdminSubscriptionSummary = {
+    total: items.length,
+    demo: 0,
+    annual: 0,
+    active: 0,
+    expiring: 0,
+    expired: 0,
+    suspended: 0,
+    cancelled: 0,
+    none: 0,
+    demoActive: 0,
+    annualActive: 0,
+  };
+  for (const item of items) {
+    if (item.plan === "DEMO") {
+      summary.demo = (summary.demo ?? 0) + 1;
+      if (item.status === "ACTIVE") summary.demoActive = (summary.demoActive ?? 0) + 1;
+    }
+    if (item.plan === "ANNUAL") {
+      summary.annual = (summary.annual ?? 0) + 1;
+      if (item.status === "ACTIVE") summary.annualActive = (summary.annualActive ?? 0) + 1;
+    }
+    if (item.status === "ACTIVE") {
+      summary.active = (summary.active ?? 0) + 1;
+      if (item.remainingDays >= 0 && item.remainingDays <= 30) {
+        summary.expiring = (summary.expiring ?? 0) + 1;
+      }
+    } else if (item.status === "EXPIRED") summary.expired = (summary.expired ?? 0) + 1;
+    else if (item.status === "SUSPENDED") summary.suspended = (summary.suspended ?? 0) + 1;
+    else if (item.status === "CANCELLED") summary.cancelled = (summary.cancelled ?? 0) + 1;
+  }
+  return summary;
+}
+
+export function getAdminSubscriptionDetail(auth: AdminAuth, tenantId: string) {
+  return apiRequest<{ subscription: AdminSubscription; tenant: { id: string; name: string; isActive: boolean } }>(
+    `/api/admin/subscriptions/${tenantId}`,
+    auth,
+  );
+}
+
+export function listAdminSubscriptionHistory(
+  auth: AdminAuth,
+  tenantId: string,
+  params?: { page?: number; perPage?: number },
+) {
+  return apiRequest<AdminPaged<AdminSubscriptionHistoryItem>>(
+    `/api/admin/subscriptions/${tenantId}/history${qs(params ?? {})}`,
+    auth,
+  );
+}
+
+export function startAdminDemo(
+  auth: AdminAuth,
+  tenantId: string,
+  body: { days?: number; reason: string },
+) {
+  return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/demo/start`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function extendAdminDemo(
+  auth: AdminAuth,
+  tenantId: string,
+  body: { days: number; reason: string; expectedVersion?: number },
+) {
+  return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/demo/extend`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function convertAdminAnnual(
+  auth: AdminAuth,
+  tenantId: string,
+  body: { reason: string; netPrice?: number; paymentNote?: string },
+) {
+  return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/convert-annual`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function startAdminAnnual(
+  auth: AdminAuth,
+  tenantId: string,
+  body: { reason: string; netPrice?: number; endsAt?: string },
+) {
+  return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/annual/start`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function renewAdminAnnual(
+  auth: AdminAuth,
+  tenantId: string,
+  body: { reason: string; paymentNote?: string },
+) {
+  return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/annual/renew`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function cancelAdminSubscription(auth: AdminAuth, tenantId: string, reason: string) {
+  return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/cancel`, {
+    ...auth,
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+/** Prefer demo extend for day-based extensions; endsAt still uses legacy extend. */
+export function extendAdminSubscription(
+  auth: AdminAuth,
+  tenantId: string,
+  body: { days?: number; endsAt?: string; reason: string; expectedVersion?: number },
+) {
+  if (body.days != null && body.endsAt == null) {
+    return extendAdminDemo(auth, tenantId, {
+      days: body.days,
+      reason: body.reason,
+      expectedVersion: body.expectedVersion,
+    });
+  }
   return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/extend`, {
     ...auth,
     method: "POST",
@@ -388,25 +737,36 @@ export function extendAdminSubscription(auth: AdminAuth, tenantId: string, body:
   });
 }
 
-export function changeAdminSubscriptionPlan(auth: AdminAuth, tenantId: string, plan: string) {
+/** ANNUAL plan change maps to convert-annual; other plans use legacy plan endpoint. */
+export function changeAdminSubscriptionPlan(
+  auth: AdminAuth,
+  tenantId: string,
+  plan: string,
+  reason: string,
+) {
+  if (plan === "ANNUAL") {
+    return convertAdminAnnual(auth, tenantId, { reason });
+  }
   return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/plan`, {
     ...auth,
     method: "POST",
-    body: JSON.stringify({ plan }),
+    body: JSON.stringify({ plan, reason }),
   });
 }
 
-export function suspendAdminSubscription(auth: AdminAuth, tenantId: string) {
+export function suspendAdminSubscription(auth: AdminAuth, tenantId: string, reason: string) {
   return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/suspend`, {
     ...auth,
     method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
 
-export function reactivateAdminSubscription(auth: AdminAuth, tenantId: string) {
+export function reactivateAdminSubscription(auth: AdminAuth, tenantId: string, reason: string) {
   return apiRequest<{ subscription: AdminSubscription }>(`/api/admin/subscriptions/${tenantId}/reactivate`, {
     ...auth,
     method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
 
@@ -455,9 +815,47 @@ export function getAdminSystem(auth: AdminAuth) {
 
 export function listAdminAuditLogs(
   auth: AdminAuth,
-  params: { page?: number; perPage?: number; search?: string; tenantId?: string; action?: string },
+  params: {
+    page?: number;
+    perPage?: number;
+    search?: string;
+    tenantId?: string;
+    action?: string;
+    targetType?: string;
+    from?: string;
+    to?: string;
+  },
 ) {
   return apiRequest<AdminPaged<AdminAuditLog>>(`/api/admin/audit-logs${qs(params)}`, auth);
+}
+
+export type AdminTenantStatsItem = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  siteCount: number;
+  buildingCount: number;
+  apartmentCount: number;
+  userCount: number;
+  lastLoginAt: string | null;
+  activeUsers7d: number;
+  activeUsers30d: number;
+  subscription: AdminSubscription | null;
+  usageFlags: {
+    hasDebts: boolean;
+    hasPayments: boolean;
+    hasBankImport: boolean;
+    whatsappConnected: boolean;
+    whatsappStatus: string | null;
+  };
+};
+
+export function listAdminTenantStats(
+  auth: AdminAuth,
+  params: { page?: number; perPage?: number; search?: string } = {},
+) {
+  return apiRequest<AdminPaged<AdminTenantStatsItem>>(`/api/admin/tenant-stats${qs(params)}`, auth);
 }
 
 export type PlatformEmailIntegration = {
@@ -523,9 +921,9 @@ export function createAdminTenant(
     name: string;
     managerFullName: string;
     managerEmail: string;
-    plan: "DEMO" | "PROFESSIONAL";
+    plan: "DEMO" | "ANNUAL";
     trialDays?: number;
-    licenseTerm?: "1m" | "3m" | "6m" | "1y" | "custom";
+    annualDays?: number;
     endsAt?: string;
   },
 ) {

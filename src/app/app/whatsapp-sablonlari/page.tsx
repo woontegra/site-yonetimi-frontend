@@ -256,7 +256,7 @@ export default function WhatsAppSablonlariPage() {
                 className="flex flex-col gap-3 rounded-md border border-line bg-white px-4 py-4 shadow-panel sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-ink">{item.displayName}</p>
+                  <p className="text-[13px] font-medium text-ink">{item.displayName}</p>
                   <p className="mt-1 text-[13px] text-muted">{item.description}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {Object.entries(item.variableLabels).map(([slot, label]) => (

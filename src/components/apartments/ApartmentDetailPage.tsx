@@ -148,7 +148,7 @@ function RelationGroup({
 }) {
   return (
     <div className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold text-ink">{title}</h2>
+      <h2 className="mb-2 text-[13px] font-medium text-ink">{title}</h2>
       <Table>
         <TableElement>
           <THead>
@@ -674,7 +674,7 @@ export function ApartmentDetailPage() {
           {tab === "genel" ? (
             <div className="space-y-4">
               <section className="rounded-lg border border-line bg-surface p-4">
-                <h2 className="text-sm font-semibold text-ink">Daire bilgileri</h2>
+                <h2 className="text-[13px] font-medium text-ink">Daire bilgileri</h2>
                 <p className="mt-2 text-sm text-muted">
                   {apartment.description || "Bu daire için henüz açıklama girilmedi."}
                 </p>
@@ -688,7 +688,7 @@ export function ApartmentDetailPage() {
 
               <section className="rounded-lg border border-line bg-surface p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-ink">Malikler</h2>
+                  <h2 className="text-[13px] font-medium text-ink">Malikler</h2>
                   <Button size="sm" variant="secondary" onClick={() => setTab("kisiler")}>
                     Yönet
                   </Button>
@@ -717,7 +717,7 @@ export function ApartmentDetailPage() {
 
               <section className="rounded-lg border border-line bg-surface p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-ink">Kiracılar / oturanlar</h2>
+                  <h2 className="text-[13px] font-medium text-ink">Kiracılar / oturanlar</h2>
                   <Button size="sm" variant="secondary" onClick={() => setTab("kisiler")}>
                     Yönet
                   </Button>
@@ -750,7 +750,7 @@ export function ApartmentDetailPage() {
 
               <section className="rounded-lg border border-line bg-surface p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-ink">Aktif aidat muafiyeti</h2>
+                  <h2 className="text-[13px] font-medium text-ink">Aktif aidat muafiyeti</h2>
                   {canManageDues ? (
                     <Button size="sm" variant="secondary" onClick={() => setExemptionOpen(true)}>
                       {apartment.duesStatus?.exemption ? "Düzenle" : "Tanımla"}
@@ -792,7 +792,7 @@ export function ApartmentDetailPage() {
               </section>
 
               <section className="rounded-lg border border-line bg-surface p-4">
-                <h2 className="mb-3 text-sm font-semibold text-ink">Açık borç özeti</h2>
+                <h2 className="mb-3 text-[13px] font-medium text-ink">Açık borç özeti</h2>
                 <p className="text-sm text-ink">
                   {apartment.debtStatus?.code === "NONE"
                     ? "Borcu yok"
@@ -802,7 +802,7 @@ export function ApartmentDetailPage() {
               </section>
 
               <section className="rounded-lg border border-line bg-surface p-4">
-                <h2 className="mb-3 text-sm font-semibold text-ink">İlişki geçmişi</h2>
+                <h2 className="mb-3 text-[13px] font-medium text-ink">İlişki geçmişi</h2>
                 {(apartment.relationHistory?.length ?? 0) === 0 ? (
                   <p className="text-sm text-muted">İlişki kaydı yok.</p>
                 ) : (

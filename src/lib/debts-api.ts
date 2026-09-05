@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/http";
 
 export type DebtStatus = "OPEN" | "PAID" | "CANCELLED";
-export type DebtType = "DUES" | "MANUAL";
+export type DebtType = "DUES" | "MANUAL" | "INTEREST";
 export type DueState = "upcoming" | "today" | "overdue";
 
 export type ApartmentDebt = {

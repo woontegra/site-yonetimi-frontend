@@ -46,7 +46,7 @@ export function SiteSelector({ compact = false, className }: SiteSelectorProps) 
         onClick={() => setOpen((v) => !v)}
       >
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-ink">
+          <span className="block truncate text-[13px] font-medium text-ink">
             {site?.name ?? "Site seç"}
           </span>
           {!compact ? (
@@ -69,7 +69,7 @@ export function SiteSelector({ compact = false, className }: SiteSelectorProps) 
                 type="button"
                 role="option"
                 aria-selected={selected}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-canvas"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-ink hover:bg-canvas"
                 onClick={() => {
                   if (item.id !== siteId) {
                     setSiteId(item.id);

@@ -234,7 +234,7 @@ function MatchSuggestionCell({
           <span className="mx-1 text-muted">→</span>
         </p>
       ) : null}
-      <p className="text-sm font-semibold leading-snug text-ink">{display.buildingLine}</p>
+      <p className="text-[13px] font-medium leading-snug text-ink">{display.buildingLine}</p>
       {display.ownersLine && display.tenantsLine ? (
         <div className="space-y-0.5 text-xs leading-snug text-ink">
           <p className={cn(display.nameMismatch && "text-warning")}>{display.ownersLine}</p>
@@ -650,7 +650,7 @@ export function StatementReviewWorkspace({
               )}
             >
               <p className="text-[11px] text-muted">{label}</p>
-              <p className="text-sm font-semibold text-ink">{value}</p>
+              <p className="text-[13px] font-medium text-ink">{value}</p>
             </button>
           ))}
         </div>

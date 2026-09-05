@@ -178,7 +178,7 @@ function ApartmentFifoCard({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="font-semibold text-ink">{aptLabel}</p>
-        <p className="text-sm font-semibold text-ink">{formatMoney(group.totalIncoming)}</p>
+        <p className="text-[13px] font-medium text-ink">{formatMoney(group.totalIncoming)}</p>
       </div>
       <p className="text-sm text-muted">{senders}</p>
       <p className="text-xs text-muted">

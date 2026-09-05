@@ -186,7 +186,7 @@ export function EmployeesPage() {
         actions={
           <>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
               aria-label="Durum filtresi"
@@ -196,7 +196,7 @@ export function EmployeesPage() {
               <option value="pasif">Pasif</option>
             </Select>
             <Input
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={jobTitle}
               onChange={(event) => setJobTitle(event.target.value)}
               placeholder="Görev filtresi"

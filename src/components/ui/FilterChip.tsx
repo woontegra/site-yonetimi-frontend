@@ -11,7 +11,7 @@ export function FilterChip({ label, onRemove, className }: FilterChipProps) {
   return (
     <span
       className={cn(
-        "inline-flex min-h-8 max-w-full items-center gap-1 rounded-md bg-accent-subtle px-2 py-1 text-caption font-medium text-accent",
+        "inline-flex min-h-7 max-w-full items-center gap-1 rounded-md bg-accent-subtle px-2 py-0.5 text-[11px] font-medium text-accent",
         className,
       )}
     >

@@ -247,7 +247,7 @@ export function AnnouncementsPage() {
         actions={
           <>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={priority}
               onChange={(event) => setPriority(event.target.value)}
               aria-label="Öncelik filtresi"

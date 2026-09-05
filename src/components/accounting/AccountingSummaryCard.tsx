@@ -27,22 +27,17 @@ export function AccountingSummaryCard({
     <SurfaceCard padding="sm" tone={tone} className="flex items-center justify-between">
       <div className="min-w-0">
         <p className="text-caption font-medium text-muted">{label}</p>
-        <p
-          className={cn(
-            "mt-1.5 break-words text-[1.25rem] font-semibold leading-tight tracking-tight sm:text-[1.375rem] sm:leading-none",
-            valueClassName,
-          )}
-        >
+        <p className={cn("mt-1 break-words text-stat tracking-tight", valueClassName)}>
           {value}
         </p>
       </div>
       <div
         className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-xl",
+          "flex size-8 shrink-0 items-center justify-center rounded-lg",
           iconClassName ?? tones.icon,
         )}
       >
-        <Icon className="size-5" aria-hidden />
+        <Icon className="size-4" aria-hidden />
       </div>
     </SurfaceCard>
   );

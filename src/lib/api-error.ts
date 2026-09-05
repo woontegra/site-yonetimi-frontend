@@ -45,6 +45,30 @@ const CODE_MESSAGES: Record<string, { title: string; message: string }> = {
     title: "Tahsilat iptal",
     message: "Bu tahsilat zaten iptal edilmiş.",
   },
+  PAYMENT_ALREADY_EXISTS: {
+    title: "Hareket işlenmiş",
+    message: "Bu banka hareketi daha önce tahsilata aktarıldı.",
+  },
+  FINANCE_CHECK_REQUIRES_CONFIRMATION: {
+    title: "Onay gerekli",
+    message: "Muhtemel mükerrer ödeme bulundu. Kontrol edip onayladıktan sonra devam edin.",
+  },
+  DEBT_ALLOCATION_OVERFLOW: {
+    title: "Dağıtım aşıldı",
+    message: "Dairenin ilgili dönem borcuna birden fazla ödeme dağıtılmaya çalışılıyor. Dağıtımı yeniden kontrol edin.",
+  },
+  BALANCE_CHANGED_SINCE_PREVIEW: {
+    title: "Bakiye değişti",
+    message: "Borç bakiyesi değişti. Lütfen dağıtımı yeniden kontrol edin.",
+  },
+  NO_OPEN_DEBT: {
+    title: "Açık borç yok",
+    message: "Bu dairenin açık borcu bulunmuyor. Tahsilat kaydedilemez.",
+  },
+  OVERPAYMENT_NO_CREDIT: {
+    title: "Tutar fazla",
+    message: "Ödeme tutarı açık borç toplamını aşıyor. Avans bakiyesi desteklenmiyor.",
+  },
   BANK_IMPORT_DUPLICATE: {
     title: "Mükerrer ekstre",
     message: "Bu banka hareketleri daha önce içe aktarılmış.",

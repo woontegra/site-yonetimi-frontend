@@ -10,7 +10,7 @@ export function Textarea({ className, invalid = false, ...props }: TextareaProps
     <textarea
       aria-invalid={invalid || undefined}
       className={cn(
-        "box-border min-h-[84px] w-full min-w-0 max-w-full resize-y rounded-md border bg-surface px-3 py-2.5 text-sm font-normal text-ink placeholder:text-muted/80",
+        "box-border min-h-[64px] w-full min-w-0 max-w-full resize-y rounded-md border bg-surface px-2.5 py-2 text-[13px] font-normal leading-[1.4] text-ink placeholder:text-muted/80",
         "ring-2 ring-transparent transition-[border-color,box-shadow,background-color] duration-micro",
         invalid
           ? "border-danger focus:border-danger focus:ring-danger/15"

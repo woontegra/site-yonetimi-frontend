@@ -28,25 +28,27 @@ export function EmptyState({
       className={cn(
         "flex flex-col items-center justify-center rounded-lg text-center",
         tones.empty,
-        compact ? "px-4 py-6" : "px-6 py-10",
+        compact ? "px-3 py-4" : "px-4 py-7",
         className,
       )}
     >
       {Icon ? (
         <span
           className={cn(
-            "mb-3 flex size-10 items-center justify-center rounded-lg",
+            "mb-2.5 flex size-9 items-center justify-center rounded-md",
             tones.icon,
           )}
         >
-          <Icon className="size-5" aria-hidden />
+          <Icon className="size-4" aria-hidden />
         </span>
       ) : null}
-      <p className="break-words text-sm font-medium text-ink">{title}</p>
+      <p className="break-words text-[13px] font-medium text-ink">{title}</p>
       {description ? (
-        <p className="mt-1 max-w-md break-words px-1 text-sm text-muted">{description}</p>
+        <p className="mt-0.5 max-w-md break-words px-1 text-[12px] font-normal leading-[1.35] text-muted">
+          {description}
+        </p>
       ) : null}
-      {action ? <div className="action-stack mt-4 justify-center">{action}</div> : null}
+      {action ? <div className="action-stack mt-3 justify-center">{action}</div> : null}
     </div>
   );
 }

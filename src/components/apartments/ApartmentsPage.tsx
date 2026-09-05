@@ -232,7 +232,7 @@ export function ApartmentsPage() {
         actions={
           <>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={buildingId}
               onChange={(event) => setBuildingId(event.target.value)}
               aria-label="Bina filtresi"
@@ -273,13 +273,13 @@ export function ApartmentsPage() {
       {filtersOpen ? (
         <div className="mb-4 grid grid-cols-1 gap-3 rounded-md border border-line bg-white p-3 sm:grid-cols-3">
           <Input
-            className="h-10"
+            
             placeholder="Kat"
             value={floor}
             onChange={(event) => setFloor(event.target.value)}
             aria-label="Kat filtresi"
           />
-          <Select className="h-10 text-sm" value={roomType} onChange={(event) => setRoomType(event.target.value)}>
+          <Select className="text-sm" value={roomType} onChange={(event) => setRoomType(event.target.value)}>
             <option value="">Tüm oda tipleri</option>
             {ROOM_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -287,7 +287,7 @@ export function ApartmentsPage() {
               </option>
             ))}
           </Select>
-          <Select className="h-10 text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <Select className="text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">Tüm durumlar</option>
             <option value="aktif">Aktif</option>
             <option value="pasif">Pasif</option>

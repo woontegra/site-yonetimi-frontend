@@ -272,7 +272,7 @@ export function SitesPage() {
               />
             </div>
             <Select
-              className="h-10 w-full sm:w-44"
+              className="w-full sm:w-44"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
               aria-label="Durum filtresi"

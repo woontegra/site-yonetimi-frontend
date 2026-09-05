@@ -259,7 +259,7 @@ export function FeedbackPage() {
         actions={
           <>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={type}
               onChange={(event) => setType(event.target.value)}
               aria-label="Tür filtresi"
@@ -272,7 +272,7 @@ export function FeedbackPage() {
               ))}
             </Select>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={priority}
               onChange={(event) => setPriority(event.target.value)}
               aria-label="Öncelik filtresi"
@@ -285,7 +285,7 @@ export function FeedbackPage() {
               ))}
             </Select>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={categoryId}
               onChange={(event) => setCategoryId(event.target.value)}
               aria-label="Kategori filtresi"

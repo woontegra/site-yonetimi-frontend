@@ -7,7 +7,7 @@ import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
-import { isNavActive, navSections, adminNavSections, type NavItem } from "@/lib/nav";
+import { isNavActive, navSections, adminNavSections, platformNavSection, type NavItem } from "@/lib/nav";
 import { useAuth } from "@/lib/auth-context";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions";
 import { useApiAuth } from "@/lib/active-site-context";
@@ -44,7 +44,7 @@ function NavLink({
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13.5px] font-normal transition-colors duration-micro",
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-normal transition-colors duration-micro",
         collapsed && "justify-center px-0",
         active ? "bg-accent-subtle font-medium text-accent" : "text-slate-600 hover:bg-canvas hover:text-ink",
       )}
@@ -96,6 +96,12 @@ export function AppSidebar({
     }))
     .filter((section) => section.items.length > 0);
 
+  /** Platform bölümü yalnız DB’den gelen isPlatformAdmin için DOM’a girer. */
+  const withPlatform =
+    !adminMode && ready && user.isPlatformAdmin
+      ? [...sections, platformNavSection]
+      : sections;
+
   useEffect(() => {
     if (adminMode || !ready || !auth) return;
     let cancelled = false;
@@ -137,12 +143,12 @@ export function AppSidebar({
       </div>
 
       <nav aria-label={adminMode ? "Platform yönetimi" : "Ana menü"} className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        {sections.map((section) => (
+        {withPlatform.map((section) => (
           <div key={section.id} className="mb-4">
             {collapsed && !mobile ? (
               <div className="mx-auto mb-1 h-px w-6 bg-line" aria-hidden />
             ) : (
-              <p className="px-2.5 pb-1.5 pt-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium tracking-normal text-muted">
                 {section.label}
               </p>
             )}

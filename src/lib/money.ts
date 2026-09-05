@@ -22,6 +22,7 @@ export const DEBT_STATUS_LABELS = {
 export const DEBT_TYPE_LABELS = {
   DUES: "Aidat",
   MANUAL: "Manuel",
+  INTEREST: "Gecikme Faizi",
 } as const;
 
 export const PAYMENT_METHOD_LABELS = {

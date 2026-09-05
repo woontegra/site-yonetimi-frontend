@@ -13,17 +13,21 @@ export function PageHeader({ title, description, search, actions, meta, chips }:
   const hasToolbar = Boolean(search || meta || chips);
 
   return (
-    <div className="mb-5 flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="break-words text-page text-ink">{title}</h1>
-          {description ? <p className="mt-1 break-words text-sm text-muted">{description}</p> : null}
+          {description ? (
+            <p className="mt-0.5 break-words text-[12px] font-normal leading-[1.35] text-muted">
+              {description}
+            </p>
+          ) : null}
         </div>
         {actions ? <div className="action-stack">{actions}</div> : null}
       </div>
 
       {hasToolbar ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface px-3 py-2.5 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-panel sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             {meta ? <div className="text-caption text-muted">{meta}</div> : null}
             {chips}

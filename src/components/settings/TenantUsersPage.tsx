@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -59,6 +60,7 @@ const STATUS: Record<TenantMember["status"], { label: string; tone: BadgeTone }>
 export function TenantUsersPage() {
   const { ready, user } = useAuth();
   const auth = useApiAuth({ requireSite: false });
+  const searchParams = useSearchParams();
   const { showToast, toastError } = useToast();
   const canInvite = hasPermission(user, "users.invite") || hasPermission(user, "users.manage") || !user.permissions?.length;
   const canManage = hasPermission(user, "users.manage") || !user.permissions?.length;
@@ -110,6 +112,22 @@ export function TenantUsersPage() {
     if (ready) void load();
   }, [ready, load]);
 
+  const inviteOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!ready || !canInvite || inviteOpenedRef.current) return;
+    if (searchParams.get("invite") !== "1") return;
+    inviteOpenedRef.current = true;
+    setSelected(null);
+    setFullName("");
+    setEmail("");
+    setAllSites(true);
+    setSiteIds([]);
+    setInviteHint("");
+    setRole("GORUNTULEYICI");
+    setPermissions(catalog?.roles.find((item) => item.value === "GORUNTULEYICI")?.permissions ?? []);
+    setModal("invite");
+  }, [ready, canInvite, searchParams, catalog]);
+
   const viewOnly = useMemo(
     () => catalog?.groups.flatMap((group) => group.items.map((item) => item.code)).filter((code) => code.endsWith(".view")) ?? [],
     [catalog],
@@ -151,7 +169,7 @@ export function TenantUsersPage() {
         const result = await inviteTenantUser(auth, { fullName, email, role, allSites, siteIds, permissions });
         const sent = result.invite?.status === "SENT";
         setInviteHint(sent ? "Davet e-postası gönderildi." : "Kullanıcı oluşturuldu ancak davet e-postası gönderilemedi.");
-        showToast(sent ? "Davet gönderildi." : "Kullanıcı kaydedildi; e-posta gönderilemedi.", sent ? "success" : "error");
+        showToast(sent ? "Kullanıcı daveti gönderildi." : "Kullanıcı kaydedildi; e-posta gönderilemedi.", sent ? "success" : "error");
         await load();
       } else if (selected) {
         await updateTenantUser(auth, selected.id, { role, allSites, siteIds, permissions });

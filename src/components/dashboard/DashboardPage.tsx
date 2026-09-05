@@ -116,10 +116,10 @@ export function DashboardPage() {
 
   return (
     <PageContainer>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-page text-ink">Site Genel Bakış</h1>
-          <p className="mt-1 text-sm text-muted">{siteName}</p>
+          <p className="mt-0.5 text-[12px] font-normal leading-[1.35] text-muted">{siteName}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {user.isPlatformAdmin ? (
@@ -339,7 +339,7 @@ export function DashboardPage() {
                         </div>
                         <p
                           className={cn(
-                            "shrink-0 text-sm font-semibold",
+                            "shrink-0 text-[13px] font-medium",
                             isPayment ? "text-success" : "text-danger",
                           )}
                         >

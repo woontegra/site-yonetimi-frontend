@@ -313,7 +313,7 @@ export function DuesDetailPage() {
               />
             </div>
             <Select
-              className="h-10 w-full sm:w-40"
+              className="w-full sm:w-40"
               value={debtStatus}
               onChange={(event) => setDebtStatus(event.target.value as "hepsi" | DebtStatus)}
               aria-label="Borç durumu"

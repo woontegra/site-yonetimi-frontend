@@ -18,7 +18,7 @@ import {
   formatDateTr,
   formatMoney,
 } from "@/lib/money";
-import { cancelPayment, getPayment, type Payment } from "@/lib/payments-api";
+import { cancelPayment, getPayment, previewPaymentCancel, type FinanceCheckResult, type Payment } from "@/lib/payments-api";
 
 function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -39,6 +39,7 @@ export function PaymentDetailPage() {
   const [error, setError] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelPending, setCancelPending] = useState(false);
+  const [cancelCheck, setCancelCheck] = useState<FinanceCheckResult | null>(null);
 
   const load = useCallback(async () => {
     if (!auth || !params.id) return;
@@ -57,6 +58,18 @@ export function PaymentDetailPage() {
     void load();
   }, [ready, load]);
 
+  async function openCancelDialog() {
+    if (!auth || !payment) return;
+    setCancelOpen(true);
+    setCancelCheck(null);
+    try {
+      const result = await previewPaymentCancel(auth, payment.id);
+      setCancelCheck(result.check);
+    } catch (err) {
+      toastError(err, "İptal önizlemesi alınamadı.");
+    }
+  }
+
   async function handleCancel() {
     if (!auth || !payment || cancelPending) return;
     setCancelPending(true);
@@ -64,7 +77,16 @@ export function PaymentDetailPage() {
       const result = await cancelPayment(auth, payment.id);
       setPayment(result.payment);
       setCancelOpen(false);
-      showToast("Tahsilat iptal edildi.");
+      const reopenCount = Array.isArray(cancelCheck?.summary?.reopenLines)
+        ? (cancelCheck?.summary?.reopenLines as unknown[]).filter(
+            (line) => (line as { willReopen?: boolean }).willReopen,
+          ).length
+        : payment.allocations.length;
+      showToast(
+        reopenCount > 0
+          ? `Tahsilat iptal edildi; ${reopenCount} borç yeniden açıldı.`
+          : "Tahsilat iptal edildi.",
+      );
     } catch (err) {
       toastError(err, "Tahsilat iptal edilemedi.");
     } finally {
@@ -94,7 +116,7 @@ export function PaymentDetailPage() {
               </p>
             </div>
             {payment.status === "COMPLETED" ? (
-              <Button variant="secondary" onClick={() => setCancelOpen(true)}>
+              <Button variant="secondary" onClick={() => void openCancelDialog()}>
                 Tahsilatı İptal Et
               </Button>
             ) : null}
@@ -114,7 +136,7 @@ export function PaymentDetailPage() {
             </div>
           </dl>
 
-          <h2 className="mb-2 text-sm font-semibold text-ink">Borç Dağılımı</h2>
+          <h2 className="mb-2 text-[13px] font-medium text-ink">Borç Dağılımı</h2>
           <Table>
             <TableElement>
               <THead>
@@ -143,11 +165,40 @@ export function PaymentDetailPage() {
           <ConfirmDialog
             open={cancelOpen}
             title="Tahsilat iptal edilsin mi?"
-            description="Bu tahsilat iptal edildiğinde borçlara dağıtılan tutarlar geri alınacaktır."
+            description={
+              typeof cancelCheck?.summary?.openDebtIncrease === "string"
+                ? `Bu tahsilat iptal edilirse dairenin açık borcu ${Number(
+                    cancelCheck.summary.openDebtIncrease,
+                  ).toLocaleString("tr-TR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} ₺ artacaktır.`
+                : "Bu tahsilat iptal edildiğinde borçlara dağıtılan tutarlar geri alınacaktır."
+            }
             confirmLabel="Tahsilatı İptal Et"
             cancelLabel="Vazgeç"
             danger
             pending={cancelPending}
+            alert={
+              Array.isArray(cancelCheck?.summary?.reopenLines)
+                ? (
+                    cancelCheck.summary.reopenLines as Array<{
+                      title: string;
+                      restoredAmount: string;
+                      willReopen: boolean;
+                    }>
+                  )
+                    .filter((line) => line.willReopen)
+                    .map(
+                      (line) =>
+                        `${line.title}: ${Number(line.restoredAmount).toLocaleString("tr-TR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} ₺`,
+                    )
+                    .join("\n") || undefined
+                : undefined
+            }
             onConfirm={() => void handleCancel()}
             onClose={() => (cancelPending ? undefined : setCancelOpen(false))}
           />

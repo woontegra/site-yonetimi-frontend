@@ -924,24 +924,24 @@ export function SiteSetupWizard({
                     <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
                       <div>
                         <dt className="text-xs text-muted">Bina</dt>
-                        <dd className="text-lg font-semibold">{summary.counts.buildings}</dd>
+                        <dd className="text-stat">{summary.counts.buildings}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-muted">Daire</dt>
-                        <dd className="text-lg font-semibold">{summary.counts.apartments}</dd>
+                        <dd className="text-stat">{summary.counts.apartments}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-muted">Mülk sahibi</dt>
-                        <dd className="text-lg font-semibold">{summary.counts.owners}</dd>
+                        <dd className="text-stat">{summary.counts.owners}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-muted">Kiracı</dt>
-                        <dd className="text-lg font-semibold">{summary.counts.tenants}</dd>
+                        <dd className="text-stat">{summary.counts.tenants}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-muted">Sakinsiz daire</dt>
                         <dd
-                          className={`text-lg font-semibold ${
+                          className={`text-stat ${
                             summary.counts.apartmentsWithoutResident > 0 ? "text-warning" : ""
                           }`}
                         >

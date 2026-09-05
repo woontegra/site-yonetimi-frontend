@@ -140,7 +140,7 @@ function MiniStat({
   return (
     <div className="min-w-0 rounded-lg bg-canvas px-3 py-2">
       <p className="text-[11px] text-muted">{label}</p>
-      <p className={cn("mt-0.5 truncate text-sm font-semibold text-ink", className)}>{value}</p>
+      <p className={cn("mt-0.5 truncate text-[13px] font-medium text-ink", className)}>{value}</p>
     </div>
   );
 }

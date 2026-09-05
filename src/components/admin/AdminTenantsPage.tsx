@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -43,6 +44,7 @@ function deliveryLabel(item: EmailDelivery | null): string {
 export function AdminTenantsPage() {
   const { ready } = useAuth();
   const auth = useAdminAuth();
+  const searchParams = useSearchParams();
   const { showToast, toastError } = useToast();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
@@ -53,18 +55,26 @@ export function AdminTenantsPage() {
   const [error, setError] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [createOpen, setCreateOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState({
     name: "",
     managerFullName: "",
     managerEmail: "",
-    plan: "DEMO" as "DEMO" | "PROFESSIONAL",
+    plan: "DEMO" as "DEMO" | "ANNUAL",
     trialDays: "7",
-    licenseTerm: "1y" as "1m" | "3m" | "6m" | "1y" | "custom",
-    customEndsAt: "",
+    annualDays: "365",
   });
   const [created, setCreated] = useState<CreateAdminTenantResult | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("yeni") === "1") {
+      setFormError("");
+      setWizardStep(1);
+      setCreateOpen(true);
+    }
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     if (!auth) return;
@@ -110,27 +120,14 @@ export function AdminTenantsPage() {
       if (form.plan === "DEMO") {
         const days = Number(form.trialDays);
         if (!Number.isInteger(days) || days < 1) {
-          setFormError("Deneme süresi 1–90 gün olmalıdır.");
+          setFormError("Demo süresi 1–90 gün olmalıdır.");
           setPending(false);
           return;
         }
         payload.trialDays = days;
       } else {
-        payload.licenseTerm = form.licenseTerm;
-        if (form.licenseTerm === "custom") {
-          if (!form.customEndsAt) {
-            setFormError("Özel bitiş tarihi seçin.");
-            setPending(false);
-            return;
-          }
-          const ends = new Date(`${form.customEndsAt}T23:59:59`);
-          if (Number.isNaN(ends.getTime()) || ends.getTime() <= Date.now()) {
-            setFormError("Bitiş tarihi geçmiş olamaz.");
-            setPending(false);
-            return;
-          }
-          payload.endsAt = ends.toISOString();
-        }
+        const days = Number(form.annualDays) || 365;
+        payload.annualDays = days;
       }
       const result = await createAdminTenant(auth, payload);
       setCreateOpen(false);
@@ -141,8 +138,7 @@ export function AdminTenantsPage() {
         managerEmail: "",
         plan: "DEMO",
         trialDays: "7",
-        licenseTerm: "1y",
-        customEndsAt: "",
+        annualDays: "365",
       });
       await load();
     } catch (err) {
@@ -155,13 +151,13 @@ export function AdminTenantsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Tenantlar"
+        title="Organizasyon Yönetimi"
         description="Platform müşteri hesapları."
         search={
           <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tenant, kullanıcı veya e-posta"
+            placeholder="Organizasyon, kullanıcı veya e-posta"
           />
         }
         actions={
@@ -170,10 +166,18 @@ export function AdminTenantsPage() {
               <option value="">Tüm durumlar</option>
               <option value="aktif">Aktif</option>
               <option value="pasif">Pasif</option>
-              <option value="deneme">Deneme</option>
-              <option value="lisansli">Lisanslı</option>
+              <option value="demo">Demo</option>
+              <option value="annual">Yıllık</option>
             </Select>
-            <Button onClick={() => { setFormError(""); setCreateOpen(true); }}>Tenant oluştur</Button>
+            <Button
+              onClick={() => {
+                setFormError("");
+                setWizardStep(1);
+                setCreateOpen(true);
+              }}
+            >
+              Yeni organizasyon
+            </Button>
           </div>
         }
       />
@@ -259,68 +263,101 @@ export function AdminTenantsPage() {
 
       <FormModal
         open={createOpen}
-        title="Tenant oluştur"
-        description="Organizasyon ve yönetici hesabı oluşturulur. Açık şifre e-posta ile gönderilmez."
+        title="Yeni organizasyon"
+        description={`Adım ${wizardStep}/4 — Kayıt yalnız son adımda oluşturulur.`}
         icon={Building2}
         onClose={() => (pending ? undefined : setCreateOpen(false))}
         footer={
           <>
-            <Button variant="secondary" disabled={pending} onClick={() => setCreateOpen(false)}>İptal</Button>
-            <Button disabled={pending} onClick={() => void submitCreate()}>{pending ? "Oluşturuluyor…" : "Oluştur"}</Button>
+            {wizardStep > 1 ? (
+              <Button variant="secondary" disabled={pending} onClick={() => setWizardStep((s) => s - 1)}>
+                Geri
+              </Button>
+            ) : (
+              <Button variant="secondary" disabled={pending} onClick={() => setCreateOpen(false)}>
+                İptal
+              </Button>
+            )}
+            {wizardStep < 4 ? (
+              <Button
+                disabled={pending}
+                onClick={() => {
+                  setFormError("");
+                  if (wizardStep === 1 && (!form.name.trim() || form.name.trim().length < 2)) {
+                    setFormError("Organizasyon adı zorunludur.");
+                    return;
+                  }
+                  if (wizardStep === 2 && (!form.managerFullName.trim() || !form.managerEmail.trim())) {
+                    setFormError("Yönetici adı ve e-posta zorunludur.");
+                    return;
+                  }
+                  setWizardStep((s) => s + 1);
+                }}
+              >
+                İleri
+              </Button>
+            ) : (
+              <Button disabled={pending} onClick={() => void submitCreate()}>
+                {pending ? "Oluşturuluyor…" : "Organizasyonu Oluştur"}
+              </Button>
+            )}
           </>
         }
       >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="Firma / organizasyon adı" required className="sm:col-span-2">
+        {formError ? <p className="mb-3 text-[12px] text-danger">{formError}</p> : null}
+        {wizardStep === 1 ? (
+          <FormField label="Organizasyon adı" required>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-modal-autofocus />
           </FormField>
-          <FormField label="Yönetici adı soyadı" required>
-            <Input value={form.managerFullName} onChange={(e) => setForm({ ...form, managerFullName: e.target.value })} />
-          </FormField>
-          <FormField label="Yönetici e-posta" required>
-            <Input type="email" value={form.managerEmail} onChange={(e) => setForm({ ...form, managerEmail: e.target.value })} />
-          </FormField>
-          <FormField label="Plan">
-            <Select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value as typeof form.plan })}>
-              <option value="DEMO">Demo</option>
-              <option value="PROFESSIONAL">Profesyonel</option>
-            </Select>
-          </FormField>
-          {form.plan === "DEMO" ? (
-            <FormField label="Deneme süresi (gün)" hint="3, 7 veya 30 gibi değerler birebir uygulanır.">
-              <Input
-                type="number"
-                min={1}
-                max={90}
-                value={form.trialDays}
-                onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
-              />
+        ) : null}
+        {wizardStep === 2 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Yetkili adı soyadı" required>
+              <Input value={form.managerFullName} onChange={(e) => setForm({ ...form, managerFullName: e.target.value })} data-modal-autofocus />
             </FormField>
-          ) : (
-            <FormField label="Lisans süresi">
-              <Select
-                value={form.licenseTerm}
-                onChange={(e) => setForm({ ...form, licenseTerm: e.target.value as typeof form.licenseTerm })}
-              >
-                <option value="1m">1 ay</option>
-                <option value="3m">3 ay</option>
-                <option value="6m">6 ay</option>
-                <option value="1y">1 yıl</option>
-                <option value="custom">Özel bitiş tarihi</option>
+            <FormField label="E-posta" required>
+              <Input type="email" value={form.managerEmail} onChange={(e) => setForm({ ...form, managerEmail: e.target.value })} />
+            </FormField>
+            <p className="sm:col-span-2 text-[11px] text-muted">
+              İlk kullanıcı tenant yönetici rolüyle oluşturulur. Açık şifre gösterilmez; aktivasyon e-postası gönderilir.
+            </p>
+          </div>
+        ) : null}
+        {wizardStep === 3 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Plan">
+              <Select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value as typeof form.plan })}>
+                <option value="DEMO">Demo · 7 gün</option>
+                <option value="ANNUAL">Yıllık · 365 gün</option>
               </Select>
             </FormField>
-          )}
-          {form.plan === "PROFESSIONAL" && form.licenseTerm === "custom" ? (
-            <FormField label="Bitiş tarihi" required className="sm:col-span-2">
-              <Input
-                type="date"
-                value={form.customEndsAt}
-                onChange={(e) => setForm({ ...form, customEndsAt: e.target.value })}
-              />
-            </FormField>
-          ) : null}
-          {formError ? <p className="text-[13px] text-danger sm:col-span-2">{formError}</p> : null}
-        </div>
+            {form.plan === "DEMO" ? (
+              <FormField label="Demo süresi (gün)">
+                <Input type="number" min={1} max={90} value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: e.target.value })} />
+              </FormField>
+            ) : (
+              <FormField label="Lisans süresi (gün)">
+                <Input type="number" min={1} value={form.annualDays} onChange={(e) => setForm({ ...form, annualDays: e.target.value })} />
+              </FormField>
+            )}
+            {form.plan === "ANNUAL" ? (
+              <p className="sm:col-span-2 rounded-md border border-line bg-canvas/50 px-3 py-2 text-[12px] text-muted">
+                Fiyat önizleme: 4.000,00 ₺ net + %20 KDV = 4.800,00 ₺
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {wizardStep === 4 ? (
+          <dl className="grid gap-2 text-[12px]">
+            <div className="flex justify-between gap-2"><dt className="text-muted">Organizasyon</dt><dd className="font-medium">{form.name}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-muted">Yetkili</dt><dd className="font-medium">{form.managerFullName}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-muted">E-posta</dt><dd className="font-medium">{form.managerEmail}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-muted">Plan</dt><dd className="font-medium">{form.plan === "DEMO" ? `Demo · ${form.trialDays} gün` : `Yıllık · ${form.annualDays} gün`}</dd></div>
+            <p className="mt-2 text-[11px] text-muted">
+              Oluşturulacaklar: organizasyon, ilk yönetici kullanıcı, üyelik, lisans kaydı. Hata olursa hiçbir kayıt bırakılmaz.
+            </p>
+          </dl>
+        ) : null}
       </FormModal>
 
       <Modal

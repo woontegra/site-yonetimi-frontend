@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, MoreHorizontal, Plus, Upload } from "lucide-react";
 import {
   BankAccountFormModal,
@@ -119,8 +120,17 @@ export function BankAccountsPage() {
   const { showToast, toastError } = useToast();
   const auth = useApiAuth({ requireSite: true });
   const { site, hasSites } = useActiveSite();
+  const searchParams = useSearchParams();
 
-  const [tab, setTab] = useState<HubTab>("hareketler");
+  const initialTab = ((): HubTab => {
+    const raw = searchParams.get("tab");
+    if (raw === "hareketler" || raw === "ekstre" || raw === "kurallar" || raw === "hesaplar") {
+      return raw;
+    }
+    return "hareketler";
+  })();
+
+  const [tab, setTab] = useState<HubTab>(initialTab);
   const [summary, setSummary] = useState<BankHubSummary | null>(null);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);

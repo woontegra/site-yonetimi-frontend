@@ -26,7 +26,7 @@ export function AuthPasswordField({ className, invalid, ref, ...props }: AuthPas
       />
       <button
         type="button"
-        className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-muted hover:text-ink"
+        className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-muted hover:text-ink md:size-9 md:rounded-lg"
         onClick={() => setVisible((value) => !value)}
         aria-label={visible ? "Şifreyi gizle" : "Şifreyi göster"}
       >

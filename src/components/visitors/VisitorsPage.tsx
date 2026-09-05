@@ -458,7 +458,7 @@ export function VisitorsPage() {
       {filtersOpen ? (
         <div className="mb-4 grid grid-cols-1 gap-3 rounded-md border border-line bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
           <Select
-            className="h-10 text-sm"
+            className="text-sm"
             value={buildingId}
             onChange={(event) => setBuildingId(event.target.value)}
             aria-label="Bina filtresi"
@@ -472,7 +472,7 @@ export function VisitorsPage() {
           </Select>
           {tab === "gecmis" ? (
             <Select
-              className="h-10 text-sm"
+              className="text-sm"
               value={historyStatus}
               onChange={(event) => setHistoryStatus(event.target.value)}
               aria-label="Durum filtresi"
@@ -483,7 +483,7 @@ export function VisitorsPage() {
             </Select>
           ) : null}
           <Select
-            className="h-10 text-sm"
+            className="text-sm"
             value={datePreset}
             onChange={(event) => {
               const next = event.target.value as DatePreset;
@@ -506,14 +506,14 @@ export function VisitorsPage() {
             <>
               <Input
                 type="date"
-                className="h-10 text-sm"
+                className="text-sm"
                 value={customFrom}
                 onChange={(event) => setCustomFrom(event.target.value)}
                 aria-label="Başlangıç tarihi"
               />
               <Input
                 type="date"
-                className="h-10 text-sm"
+                className="text-sm"
                 value={customTo}
                 onChange={(event) => setCustomTo(event.target.value)}
                 aria-label="Bitiş tarihi"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -13,11 +13,16 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Table, TableElement, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { TableEmptyState } from "@/components/ui/TableEmptyState";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { PLAN_LABELS, SUB_STATUS_LABELS, roleLabel } from "@/components/admin/labels";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
 import { useAdminAuth } from "@/lib/active-site-context";
-import { getAdminUserSummary, listAdminUsers, type AdminUserListItem } from "@/lib/admin-api";
+import {
+  getAdminUserSummary,
+  listAdminUsers,
+  type AdminUserListItem,
+} from "@/lib/admin-api";
 import { ApiError } from "@/lib/http";
 import { formatDateTr } from "@/lib/money";
 
@@ -28,15 +33,32 @@ export function AdminUsersPage() {
   const auth = useAdminAuth();
   const searchParams = useSearchParams();
   const tenantFromQuery = searchParams.get("tenant") ?? "";
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
+  const [page, setPage] = useState(Number(searchParams.get("page") || "1") || 1);
   const [total, setTotal] = useState(0);
   const [items, setItems] = useState<AdminUserListItem[]>([]);
   const [summary, setSummary] = useState({ total: 0, active: 0, inactive: 0, trial: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const debouncedSearch = useDebouncedValue(search);
+
+  const listQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (debouncedSearch.trim()) params.set("q", debouncedSearch.trim());
+    if (status) params.set("status", status);
+    if (tenantFromQuery) params.set("tenant", tenantFromQuery);
+    if (page > 1) params.set("page", String(page));
+    return params.toString();
+  }, [debouncedSearch, status, tenantFromQuery, page]);
+
+  const detailHref = useCallback(
+    (userId: string) => {
+      const from = listQuery ? `?from=${encodeURIComponent(listQuery)}` : "";
+      return `/app/admin/kullanicilar/${userId}${from}`;
+    },
+    [listQuery],
+  );
 
   const load = useCallback(async () => {
     if (!auth) return;
@@ -72,8 +94,8 @@ export function AdminUsersPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Kullanıcılar"
-        description="Giriş yapan sistem hesapları. Site içindeki kişilerle karıştırılmaz."
+        title="Kullanıcı Yönetimi"
+        description="Giriş yapan sistem hesapları. Site içindeki kişilerle karıştırılmaz. Parola/hash gösterilmez."
         search={
           <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ad veya e-posta" />
         }
@@ -119,9 +141,12 @@ export function AdminUsersPage() {
               items.map((item) => (
                 <TR key={item.id}>
                   <TD>
-                    <Link href={`/app/admin/kullanicilar/${item.id}`} className="font-medium hover:text-accent">
+                    <Link href={detailHref(item.id)} className="font-medium hover:text-accent">
                       {item.fullName}
                     </Link>
+                    {item.isPlatformAdmin ? (
+                      <Badge tone="brand" className="ml-1.5">Platform</Badge>
+                    ) : null}
                   </TD>
                   <TD>{item.email}</TD>
                   <TD>
@@ -141,8 +166,8 @@ export function AdminUsersPage() {
                   <TD><StatusBadge active={item.isActive} /></TD>
                   <TD>{formatDateTr(item.createdAt)}</TD>
                   <TD>
-                    <Link href={`/app/admin/kullanicilar/${item.id}`}>
-                      <Button size="sm" variant="secondary">Aç</Button>
+                    <Link href={detailHref(item.id)}>
+                      <Button size="sm" variant="secondary">Detay</Button>
                     </Link>
                   </TD>
                 </TR>

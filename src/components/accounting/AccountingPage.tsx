@@ -438,7 +438,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
           debtStatus === "OPEN" || debtStatus === "PAID" || debtStatus === "CANCELLED"
             ? debtStatus
             : undefined,
-        type: debtType === "DUES" || debtType === "MANUAL" ? debtType : undefined,
+        type: debtType === "DUES" || debtType === "MANUAL" || debtType === "INTEREST" ? debtType : undefined,
         periodMonth: debtMonth ? Number(debtMonth) : undefined,
         periodYear: debtYear ? Number(debtYear) : undefined,
       });
@@ -754,9 +754,11 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
         {tab === "giderler" ? "Giderler" : tab === "gelirler" ? "Tahsilatlar" : "Muhasebe"}
       </h1>
       {site?.name ? (
-        <p className="mb-4 text-sm text-muted">{site.name} için gelir, gider ve borçları yönetin.</p>
+        <p className="mb-3 text-[12px] font-normal leading-[1.35] text-muted">
+          {site.name} için gelir, gider ve borçları yönetin.
+        </p>
       ) : (
-        <div className="mb-4" />
+        <div className="mb-3" />
       )}
 
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -910,6 +912,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
                     <option value="">Borç Tipi</option>
                     <option value="DUES">Aidat</option>
                     <option value="MANUAL">Manuel</option>
+                    <option value="INTEREST">Gecikme Faizi</option>
                   </Select>
                   <Select
                     className="h-9 text-sm"
@@ -1491,7 +1494,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
 
           {tab === "gecmis" ? (
             <div>
-              <h2 className="mb-2 text-sm font-semibold text-ink">Geçmiş Borçlar</h2>
+              <h2 className="mb-2 text-[13px] font-medium text-ink">Geçmiş Borçlar</h2>
               <p className="py-8 text-center text-sm text-muted">
                 Geçmiş borç verisi henüz bulunmuyor.
               </p>
@@ -1501,7 +1504,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
           {tab === "ozet" ? (
             <div className="space-y-5">
               <div>
-                <h2 className="text-sm font-semibold text-ink">Özet Rapor</h2>
+                <h2 className="text-[13px] font-medium text-ink">Özet Rapor</h2>
                 <p className="text-sm text-muted">{reportYear}</p>
               </div>
 
@@ -1556,7 +1559,7 @@ export function AccountingPage({ initialTab = "borclar" }: { initialTab?: TabId 
               </div>
 
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">Bilanço Özeti</h3>
+                <h3 className="mb-2 text-[13px] font-medium text-ink">Bilanço Özeti</h3>
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
                   <p>
                     <span className="text-muted">Toplam Gelir: </span>

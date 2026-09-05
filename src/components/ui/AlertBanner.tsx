@@ -1,5 +1,3 @@
-"use client";
-
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -44,22 +42,24 @@ export function AlertBanner({
     <div
       role={tone === "danger" || tone === "warning" ? "alert" : "status"}
       className={cn(
-        "flex gap-3 rounded-xl border px-3.5 py-3",
+        "flex gap-2.5 rounded-lg border px-3 py-2.5",
         tones.metric,
         className,
       )}
     >
       <span
         className={cn(
-          "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg",
+          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md",
           tones.icon,
         )}
       >
-        <Icon className="size-4" aria-hidden />
+        <Icon className="size-3.5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-ink">{title ?? config.titleDefault}</p>
-        <div className="mt-0.5 text-sm text-muted">{children}</div>
+        <p className="text-[13px] font-medium leading-[1.35] text-ink">
+          {title ?? config.titleDefault}
+        </p>
+        <div className="mt-0.5 text-[12px] font-normal leading-[1.35] text-muted">{children}</div>
         {action ? <div className="mt-2">{action}</div> : null}
       </div>
     </div>

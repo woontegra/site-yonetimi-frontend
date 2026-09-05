@@ -133,7 +133,7 @@ export function ExpenseTypesModal({ open, auth, onClose, onChanged }: ExpenseTyp
       <div className="space-y-4">
         <div className="flex gap-2">
           <Input
-            className="h-10 flex-1"
+            className="flex-1"
             placeholder="Yeni gider türü adı"
             value={name}
             onChange={(event) => setName(event.target.value)}

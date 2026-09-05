@@ -477,7 +477,7 @@ export function BuildingDetailPage() {
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start">
                 <SurfaceCard padding="none" className="overflow-hidden">
                   <div className="border-b border-line px-4 py-3">
-                    <h2 className="text-sm font-semibold text-ink">Bina Bilgileri</h2>
+                    <h2 className="text-[13px] font-medium text-ink">Bina Bilgileri</h2>
                   </div>
                   <div className="divide-y divide-line p-2">
                     <InfoRow label="Bina adı" value={dash(building.name)} />
@@ -497,7 +497,7 @@ export function BuildingDetailPage() {
 
                 <SurfaceCard padding="none" className="overflow-hidden">
                   <div className="border-b border-line px-4 py-3">
-                    <h2 className="text-sm font-semibold text-ink">Adres</h2>
+                    <h2 className="text-[13px] font-medium text-ink">Adres</h2>
                   </div>
                   <div className="divide-y divide-line p-2">
                     <InfoRow label="Site" value={dash(site?.name)} />
@@ -510,7 +510,7 @@ export function BuildingDetailPage() {
 
               {building.description?.trim() ? (
                 <SurfaceCard padding="sm">
-                  <h2 className="mb-2 text-sm font-semibold text-ink">Açıklama</h2>
+                  <h2 className="mb-2 text-[13px] font-medium text-ink">Açıklama</h2>
                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
                     {building.description}
                   </p>
@@ -528,7 +528,7 @@ export function BuildingDetailPage() {
               )}
 
               <SurfaceCard padding="sm">
-                <h2 className="mb-2 text-sm font-semibold text-ink">Hızlı İşlemler</h2>
+                <h2 className="mb-2 text-[13px] font-medium text-ink">Hızlı İşlemler</h2>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="secondary" onClick={openAddApartment}>
                     <Plus className="size-3.5" aria-hidden />
@@ -572,7 +572,7 @@ export function BuildingDetailPage() {
                     />
                   </div>
                   <Select
-                    className="h-10 w-full sm:w-36"
+                    className="w-full sm:w-36"
                     value={apartmentStatus}
                     onChange={(event) =>
                       setApartmentStatus(event.target.value as "hepsi" | "aktif" | "pasif")
@@ -867,7 +867,7 @@ function CompactStat({
           <Icon className="size-3.5" aria-hidden />
         </span>
       </div>
-      <p className="mt-1 text-lg font-semibold leading-none text-ink">{value}</p>
+      <p className="mt-1 text-stat tracking-tight text-ink">{value}</p>
       {hint ? <p className="mt-1 text-[11px] text-muted">{hint}</p> : null}
     </div>
   );

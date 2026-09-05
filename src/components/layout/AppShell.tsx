@@ -7,6 +7,7 @@ import { ArrowLeft, Menu } from "lucide-react";
 import { AppSidebar, persistSidebarCollapsed, readSidebarCollapsed } from "@/components/layout/AppSidebar";
 import { SiteSelector } from "@/components/layout/SiteSelector";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { LicenseBanner } from "@/components/layout/LicenseBanner";
 import { SetupIncompleteBanner } from "@/components/setup/SetupIncompleteBanner";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/lib/auth-context";
@@ -135,7 +136,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {adminMode ? null : <SetupIncompleteBanner />}
+        {adminMode ? null : (
+          <>
+            <LicenseBanner />
+            <SetupIncompleteBanner />
+          </>
+        )}
 
         <main className="min-w-0 w-full flex-1">
           <SiteScopedMain>{children}</SiteScopedMain>

@@ -22,7 +22,7 @@ export function DebtReminderBar({
           <MessageCircle className="size-5" aria-hidden />
         </div>
         <div>
-          <p className="text-sm font-semibold text-ink">Borç Hatırlatma Merkezi</p>
+          <p className="text-[13px] font-medium text-ink">Borç Hatırlatma Merkezi</p>
           <p className="mt-0.5 text-[13px] text-muted">
             Borcu olan dairelere tek tıkla toplu mesaj gönderin.
           </p>

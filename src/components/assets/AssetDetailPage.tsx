@@ -76,7 +76,7 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 function InfoGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="mb-6">
-      <h2 className="mb-3 text-sm font-semibold text-ink">{title}</h2>
+      <h2 className="mb-3 text-[13px] font-medium text-ink">{title}</h2>
       <dl className="grid grid-cols-2 gap-x-8 gap-y-3 md:grid-cols-4">{children}</dl>
     </div>
   );

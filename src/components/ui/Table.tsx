@@ -17,7 +17,7 @@ export function TableElement({
   className?: string;
 }) {
   return (
-    <table className={cn("min-w-full border-collapse text-left text-sm", className)}>
+    <table className={cn("min-w-full border-collapse text-left text-[13px]", className)}>
       {children}
     </table>
   );
@@ -25,7 +25,7 @@ export function TableElement({
 
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-line bg-canvas/90 text-caption font-medium uppercase tracking-[0.04em] text-muted">
+    <thead className="border-b border-line bg-canvas/90 text-[11px] font-semibold tracking-normal text-muted">
       {children}
     </thead>
   );
@@ -51,7 +51,7 @@ export function TR({ children, className, ...props }: HTMLAttributes<HTMLTableRo
 
 export function TH({ children, className, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <th className={cn("whitespace-nowrap px-3 py-3 font-medium sm:px-4", className)} {...props}>
+    <th className={cn("whitespace-nowrap px-2.5 py-2 font-semibold sm:px-3", className)} {...props}>
       {children}
     </th>
   );
@@ -59,7 +59,7 @@ export function TH({ children, className, ...props }: ThHTMLAttributes<HTMLTable
 
 export function TD({ children, className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className={cn("whitespace-nowrap px-3 py-3.5 text-sm font-normal sm:px-4", className)} {...props}>
+    <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-[13px] font-normal sm:px-3", className)} {...props}>
       {children}
     </td>
   );
@@ -67,6 +67,6 @@ export function TD({ children, className, ...props }: TdHTMLAttributes<HTMLTable
 
 export function TableFooter({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("border-t border-line px-4 py-3", className)}>{children}</div>
+    <div className={cn("border-t border-line px-3 py-2.5", className)}>{children}</div>
   );
 }

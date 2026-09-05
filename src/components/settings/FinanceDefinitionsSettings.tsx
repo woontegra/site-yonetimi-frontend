@@ -9,6 +9,19 @@ import {
   updateExpenseType,
 } from "@/lib/expenses-api";
 
+const SUGGESTED_EXPENSE_CATEGORIES = [
+  "Elektrik",
+  "Su",
+  "Bahçıvan",
+  "Temizlik",
+  "Personel",
+  "Bakım ve Onarım",
+  "Sigorta",
+  "Vergi ve Harç",
+  "Yönetim Gideri",
+  "Diğer",
+];
+
 export function FinanceDefinitionsSettings() {
   const list = useCallback(async (auth: { token: string; tenantId: string }) => {
     const result = await listExpenseTypes(auth);
@@ -37,22 +50,25 @@ export function FinanceDefinitionsSettings() {
 
   return (
     <CatalogCrudPanel
-      emptyLabel="Henüz gider türü eklenmedi."
-      nameColumnLabel="Gider Türü"
-      createPlaceholder="Yeni gider türü adı"
-      createButtonLabel="Yeni Gider Türü"
+      emptyLabel="Henüz gider kategorisi eklenmedi."
+      nameColumnLabel="Gider kategorisi"
+      createPlaceholder="Örn. Elektrik"
+      createButtonLabel="Yeni Gider Kategorisi"
+      nameRequiredMessage="Gider kategorisi adı zorunludur."
       showSortOrder
+      suggestedNames={SUGGESTED_EXPENSE_CATEGORIES}
+      seedButtonLabel="Önerilen kategorileri ekle"
       list={list}
       create={create}
       update={update}
       remove={remove}
       toasts={{
-        created: "Gider türü oluşturuldu.",
-        updated: "Gider türü güncellendi.",
-        activated: "Gider türü aktifleştirildi.",
-        deactivated: "Gider türü pasife alındı.",
-        deleted: "Gider türü silindi.",
-        softDeleted: "Kullanılmış gider türü pasife alındı.",
+        created: "Gider kategorisi eklendi.",
+        updated: "Gider kategorisi güncellendi.",
+        activated: "Gider kategorisi aktifleştirildi.",
+        deactivated: "Gider kategorisi pasife alındı.",
+        deleted: "Gider kategorisi silindi.",
+        softDeleted: "Kullanımdaki gider kategorisi pasife alındı.",
       }}
     />
   );

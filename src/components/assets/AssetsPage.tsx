@@ -337,7 +337,7 @@ export function AssetsPage() {
         actions={
           <>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={categoryId}
               onChange={(event) => setCategoryId(event.target.value)}
             >
@@ -349,7 +349,7 @@ export function AssetsPage() {
               ))}
             </Select>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={buildingId}
               onChange={(event) => setBuildingId(event.target.value)}
             >
@@ -361,7 +361,7 @@ export function AssetsPage() {
               ))}
             </Select>
             <Select
-              className="h-10 w-full min-w-0 text-sm sm:w-auto"
+              className="w-full min-w-0 text-sm sm:w-auto"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
             >

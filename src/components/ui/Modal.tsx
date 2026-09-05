@@ -202,23 +202,23 @@ export function Modal({
           className,
         )}
       >
-        <div className="flex shrink-0 items-start gap-3 px-5 py-4 sm:px-6">
+        <div className="flex shrink-0 items-start gap-2.5 px-4 py-3.5 sm:px-5">
           {Icon ? (
             <span
               className={cn(
-                "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
+                "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
                 iconTones[iconTone],
               )}
             >
-              <Icon className="size-4" aria-hidden />
+              <Icon className="size-3.5" aria-hidden />
             </span>
           ) : null}
           <div className="min-w-0 flex-1 pt-0.5">
-            <h2 id={titleId} className="text-[17px] font-medium leading-snug text-ink">
+            <h2 id={titleId} className="text-modal text-ink">
               {title}
             </h2>
             {description ? (
-              <p id={descriptionId} className="mt-1 whitespace-pre-line text-[13px] leading-5 text-muted">
+              <p id={descriptionId} className="mt-0.5 whitespace-pre-line text-[12px] leading-[1.35] text-muted">
                 {description}
               </p>
             ) : null}
@@ -236,7 +236,7 @@ export function Modal({
         {children ? (
           <div
             className={cn(
-              "min-h-0 flex-1 overflow-y-auto border-t border-line px-5 py-4 sm:px-6",
+              "min-h-0 flex-1 overflow-y-auto border-t border-line px-4 py-3.5 sm:px-5",
               isWorkspace && "flex flex-col",
             )}
           >
@@ -247,7 +247,7 @@ export function Modal({
         {footer ? (
           <div
             data-modal-footer
-            className="action-stack shrink-0 border-t border-line bg-canvas/50 px-5 py-4 sm:flex-row sm:justify-end"
+            className="action-stack shrink-0 border-t border-line bg-canvas/50 px-4 py-3 sm:flex-row sm:justify-end"
           >
             {footer}
           </div>

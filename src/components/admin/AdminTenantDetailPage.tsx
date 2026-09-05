@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
+  Activity,
   Building2,
   CalendarDays,
-  Cable,
   FileText,
   History,
   LayoutGrid,
@@ -15,16 +15,29 @@ import {
   StickyNote,
   Users,
 } from "lucide-react";
-import { DetailHeader, DetailTabs } from "@/components/layout/DetailHeader";
-import { PageContainer } from "@/components/layout/PageContainer";
+import {
+  AdminDangerZone,
+  AdminDetailHeader,
+  AdminDetailInfoBox,
+  AdminDetailInfoGrid,
+  AdminDetailPanel,
+  AdminDetailQuickActions,
+  AdminDetailShell,
+  AdminDetailStatCard,
+  AdminDetailStatsRow,
+  AdminDetailTabs,
+} from "@/components/admin/detail/AdminDetailPrimitives";
+import {
+  orgLicenseActions,
+  resolveLicenseUiKind,
+  type OrgLicenseAction,
+} from "@/components/admin/detail/licenseActionMatrix";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
-import { SectionCard, StatCard, SurfaceCard } from "@/components/ui/SurfaceCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Table, TableElement, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { Textarea } from "@/components/ui/Textarea";
@@ -41,18 +54,23 @@ import { useAuth } from "@/lib/auth-context";
 import { useAdminAuth } from "@/lib/active-site-context";
 import {
   activateAdminTenant,
-  changeAdminSubscriptionPlan,
+  convertAdminAnnual,
   createAdminTenantNote,
   deactivateAdminTenant,
   deleteAdminTenant,
+  extendAdminDemo,
   extendAdminTenantSubscription,
   getAdminTenant,
   listAdminTenantAuditLogs,
   listAdminTenantNotes,
   listAdminTenantSites,
   listAdminTenantUsers,
+  reactivateAdminSubscription,
+  renewAdminAnnual,
   resendAdminTenantNotification,
-  trialAdminTenantSubscription,
+  startAdminAnnual,
+  startAdminDemo,
+  suspendAdminSubscription,
   type AdminAuditLog,
   type AdminNote,
   type AdminTenantDetail,
@@ -61,7 +79,19 @@ import { ApiError } from "@/lib/http";
 import { formatDateTr } from "@/lib/money";
 
 type Tab = "genel" | "siteler" | "kullanicilar" | "abonelik" | "entegrasyonlar" | "gecmis" | "notlar";
-type QuickModal = "trial" | "plan" | "subscription" | "note" | "delete" | "edit" | null;
+type QuickModal =
+  | "extend"
+  | "convert"
+  | "renew"
+  | "subscription"
+  | "note"
+  | "delete"
+  | "edit"
+  | "startDemo"
+  | "startAnnual"
+  | "reactivate"
+  | "suspend"
+  | null;
 
 type TenantSiteRow = {
   id: string;
@@ -97,7 +127,7 @@ function addDaysIso(iso: string | undefined, days: number): string | null {
   return next.toISOString();
 }
 
-function InfoBox({ label, value }: { label: string; value: string }) {
+function ModalInfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-[12px] border border-line bg-slate-50 px-3 py-3 sm:rounded-[14px]">
       <p className="text-caption text-muted">{label}</p>
@@ -118,6 +148,29 @@ function clearDeletedTenantClientState(tenantId: string, currentTenantId: string
   }
 }
 
+function buildInterventionReasons(tenant: AdminTenantDetail): string[] {
+  const sub = tenant.subscription;
+  const reasons: string[] = [];
+  if (!tenant.isActive) reasons.push("Organizasyon askıda / pasif");
+  if (!sub) {
+    reasons.push("Lisans yok");
+  } else {
+    if (sub.status === "SUSPENDED") reasons.push("Lisans askıda");
+    if (sub.status === "CANCELLED") reasons.push("Lisans iptal edilmiş");
+    const expired =
+      sub.status === "EXPIRED" || Boolean(sub.isExpired) || sub.remainingDays < 0 || Boolean(sub.readOnly);
+    if (expired) {
+      reasons.push(sub.plan === "DEMO" ? "Demo süresi sona ermiş" : "Yıllık lisans süresi dolmuş");
+    } else if (sub.status === "ACTIVE" && sub.remainingDays <= 7) {
+      reasons.push(sub.plan === "DEMO" ? "Demo süresi bitmek üzere" : "Yıllık lisans bitmek üzere");
+    }
+  }
+  if (tenant.whatsapp?.connectionStatus === "ERROR") {
+    reasons.push("WhatsApp entegrasyonu hata durumunda");
+  }
+  return [...new Set(reasons)];
+}
+
 export function AdminTenantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -136,10 +189,11 @@ export function AdminTenantDetailPage() {
   const [pending, setPending] = useState(false);
   const [confirm, setConfirm] = useState<"deactivate" | "activate" | null>(null);
   const [quickModal, setQuickModal] = useState<QuickModal>(null);
-  const [trialDays, setTrialDays] = useState("7");
-  const [plan, setPlan] = useState("STANDARD");
+  const [trialDays, setTrialDays] = useState("3");
   const [endsAt, setEndsAt] = useState("");
+  const [licenseReason, setLicenseReason] = useState("");
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [dangerOpen, setDangerOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!auth || !id) return;
@@ -158,7 +212,6 @@ export function AdminTenantDetailPage() {
       setUsers(userRes.items as TenantUserRow[]);
       setNotes(noteRes.items);
       setLogs(logRes.items);
-      if (next.subscription) setPlan(next.subscription.plan);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Tenant yüklenemedi.");
     } finally {
@@ -193,26 +246,32 @@ export function AdminTenantDetailPage() {
     [trialDaysNum],
   );
 
-  const needsIntervention = Boolean(
-    tenant &&
-      (!tenant.isActive ||
-        (sub && (sub.status === "EXPIRED" || sub.remainingDays <= 7)) ||
-        tenant.whatsapp?.connectionStatus === "ERROR"),
+  const interventionReasons = useMemo(
+    () => (tenant ? buildInterventionReasons(tenant) : []),
+    [tenant],
   );
+  const needsIntervention = interventionReasons.length > 0;
+
+  const licenseKind = resolveLicenseUiKind(sub);
+  const quickActionKeys = useMemo(
+    () => (tenant ? orgLicenseActions(licenseKind, tenant.isActive) : []),
+    [tenant, licenseKind],
+  );
+  const hasAction = (key: OrgLicenseAction) => quickActionKeys.includes(key);
 
   if (loading && !tenant) {
     return (
-      <PageContainer>
+      <AdminDetailShell>
         <p className="text-sm text-muted">Yükleniyor…</p>
-      </PageContainer>
+      </AdminDetailShell>
     );
   }
 
   if (error || !tenant) {
     return (
-      <PageContainer>
+      <AdminDetailShell>
         <p className="text-sm text-danger">{error || "Tenant bulunamadı."}</p>
-      </PageContainer>
+      </AdminDetailShell>
     );
   }
 
@@ -221,33 +280,79 @@ export function AdminTenantDetailPage() {
     ? CONNECTION_LABELS[tenant.whatsapp.connectionStatus] ?? tenant.whatsapp.connectionStatus
     : "Bağlı değil";
   const emailLabel = tenant.email?.connected ? "E-posta bağlı" : "E-posta bağlı değil";
-  const connectedCount = tenant.integrationSummary?.connectedCount ?? Number(Boolean(tenant.whatsapp?.connectionStatus === "CONNECTED")) + Number(Boolean(tenant.email?.connected));
+
+  const activeSiteCount = sites.filter((s) => s.isActive).length;
+  const activeUserCount = users.filter((u) => u.isActive).length;
+  const siteTotal = tenant.usage.sites;
+  const userTotal = tenant.usage.users;
+  const messages = tenant.usage.messages;
+
+  const licenseValue = sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "Lisans yok";
+  const licenseHint = sub
+    ? [remaining, `Bitiş ${formatDateTr(sub.endsAt)}`].filter(Boolean).join(" · ")
+    : "Kayıt yok";
+
+  const usageValue =
+    typeof messages === "number" && messages > 0 ? `${messages} mesaj` : "—";
+  const usageHint =
+    typeof messages === "number" && messages > 0
+      ? "İletişim kaydı (dönem özeti)"
+      : "Kullanım verisi yok";
+
+  const counts = tenant.recordCounts;
+  const relatedSites = counts?.sites ?? tenant.usage.sites;
+  const relatedUsers = counts?.users ?? tenant.usage.users;
+  const relatedDebts = counts?.debts ?? 0;
+  const relatedPayments = counts?.payments ?? 0;
+  const relatedExpenses = counts?.expenses ?? 0;
+  const hardDeleteBlocked =
+    Boolean(tenant.isProtected) ||
+    relatedSites > 0 ||
+    relatedUsers > 0 ||
+    relatedDebts > 0 ||
+    relatedPayments > 0 ||
+    relatedExpenses > 0;
+
+  function openExtend(days = "3") {
+    setTrialDays(days);
+    setLicenseReason("");
+    setQuickModal("extend");
+  }
 
   return (
-    <PageContainer>
-      <DetailHeader
+    <AdminDetailShell>
+      <AdminDetailHeader
         backHref="/app/admin/tenantlar"
-        backLabel="Tenant listesi"
+        backLabel="Organizasyon listesi"
         title={tenant.name}
-        description={
-          <div className="space-y-2">
-            <p className="break-words">{tenant.owner?.fullName ?? "—"}</p>
-            <p className="break-all text-muted">{tenant.owner?.email ?? "—"}</p>
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              <StatusBadge active={tenant.isActive} />
-              {sub ? <Badge tone="brand">{PLAN_LABELS[sub.plan] ?? sub.plan}</Badge> : <Badge>Plan yok</Badge>}
-              {sub?.plan === "PROFESSIONAL" && sub.status === "ACTIVE" ? (
-                <Badge tone="success">Aktif lisans</Badge>
-              ) : sub ? (
-                <Badge tone={sub.status === "TRIAL" ? "info" : "neutral"}>{SUB_STATUS_LABELS[sub.status] ?? sub.status}</Badge>
-              ) : null}
-              {sub?.plan === "PROFESSIONAL" ? (
-                <Badge tone="neutral">Bitiş: {formatDateTr(sub.endsAt)}</Badge>
-              ) : null}
-              {remaining ? <Badge tone={sub && sub.remainingDays <= 7 ? "warning" : "neutral"}>{remaining}</Badge> : null}
-              {needsIntervention ? <Badge tone="danger">Müdahale Gerekli</Badge> : null}
-            </div>
-          </div>
+        subtitle={
+          <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+            <span>{tenant.owner?.fullName ?? "—"}</span>
+            <span className="text-muted">{tenant.owner?.email ?? "—"}</span>
+          </span>
+        }
+        badges={
+          <>
+            <StatusBadge active={tenant.isActive} />
+            {sub ? (
+              <Badge tone={sub.plan === "DEMO" ? "info" : "brand"}>
+                {PLAN_LABELS[sub.plan] ?? sub.plan}
+              </Badge>
+            ) : (
+              <Badge>Lisans yok</Badge>
+            )}
+            {remaining ? (
+              <Badge tone={sub && sub.remainingDays <= 7 ? "warning" : "neutral"}>{remaining}</Badge>
+            ) : null}
+            {needsIntervention ? (
+              <Badge tone="danger">
+                Müdahale gerekli
+                {interventionReasons[0] ? ` · ${interventionReasons[0]}` : ""}
+              </Badge>
+            ) : (
+              <Badge tone="success">Normal</Badge>
+            )}
+          </>
         }
         actions={
           <Button size="sm" variant="secondary" onClick={() => setQuickModal("edit")}>
@@ -257,48 +362,48 @@ export function AdminTenantDetailPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Abonelik"
-          value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"}
-          hint={
-            sub
-              ? sub.plan === "PROFESSIONAL"
-                ? `Aktif lisans · Bitiş ${formatDateTr(sub.endsAt)}${remaining ? ` · ${remaining}` : ""}`
-                : `${SUB_STATUS_LABELS[sub.status] ?? sub.status}${remaining ? ` · ${remaining}` : ""}`
-              : "Kayıt yok"
-          }
+      <AdminDetailStatsRow>
+        <AdminDetailStatCard
+          label="Lisans"
+          value={licenseValue}
+          hint={licenseHint}
           icon={CalendarDays}
+          tone={sub?.plan === "ANNUAL" ? "green" : sub ? "blue" : "amber"}
         />
-        <StatCard
-          label="Organizasyon"
-          value={`${tenant.usage.sites} site`}
-          hint={`${tenant.usage.apartments} daire`}
+        <AdminDetailStatCard
+          label="Siteler"
+          value={`${siteTotal} site`}
+          hint={
+            sites.length > 0
+              ? `${activeSiteCount} aktif`
+              : tenant.usage.apartments > 0
+                ? `${tenant.usage.apartments} daire`
+                : "—"
+          }
           icon={Building2}
+          tone="teal"
         />
-        <StatCard
+        <AdminDetailStatCard
+          label="Kullanıcılar"
+          value={`${userTotal} kullanıcı`}
+          hint={users.length > 0 ? `${activeUserCount} aktif` : "—"}
+          icon={Users}
+          tone="blue"
+        />
+        <AdminDetailStatCard
           label="Kullanım"
-          value={`${tenant.usage.users} kullanıcı`}
-          hint={`${tenant.usage.messages} iletişim kaydı`}
-          icon={LayoutGrid}
+          value={usageValue}
+          hint={usageHint}
+          icon={Activity}
+          tone="amber"
         />
-        <StatCard
-          label="Entegrasyonlar"
-          value={`${connectedCount} bağlı`}
-          hint={`${whatsappLabel} · ${emailLabel}`}
-          icon={Cable}
-        />
-      </div>
+      </AdminDetailStatsRow>
 
-      <SectionCard
-        className="mb-5"
-        title="Hızlı İşlemler"
-        description="Bu tenant için platform işlemlerini tek yerden yönetin."
-      >
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <AdminDetailQuickActions>
+        {hasAction("resend") ? (
           <Button
+            size="sm"
             variant="secondary"
-            className="w-full"
             disabled={pending}
             onClick={() =>
               void run(() => resendAdminTenantNotification(auth!, id), "Davet e-postası yeniden gönderildi.")
@@ -306,52 +411,147 @@ export function AdminTenantDetailPage() {
           >
             Davet E-postasını Yeniden Gönder
           </Button>
-          <Button variant="secondary" className="w-full" disabled={pending} onClick={() => setQuickModal("trial")}>
-            Deneme Süresi Ekle
+        ) : null}
+        {hasAction("demoPlus3") ? (
+          <Button size="sm" variant="secondary" disabled={pending} onClick={() => openExtend("3")}>
+            +3 Gün
           </Button>
-          <Button variant="secondary" className="w-full" disabled={pending} onClick={() => setQuickModal("plan")}>
-            Planı Değiştir
+        ) : null}
+        {hasAction("demoExtend") ? (
+          <Button size="sm" variant="secondary" disabled={pending} onClick={() => openExtend("7")}>
+            Demo Süresi Ekle
           </Button>
-          <Button variant="secondary" className="w-full" disabled={pending} onClick={() => setQuickModal("subscription")}>
-            Aboneliği Yönet
+        ) : null}
+        {hasAction("convertAnnual") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setQuickModal("convert");
+            }}
+          >
+            Yıllığa Dönüştür
           </Button>
-          <Button variant="secondary" className="w-full" disabled={pending} onClick={() => setQuickModal("note")}>
+        ) : null}
+        {hasAction("renewAnnual") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setQuickModal("renew");
+            }}
+          >
+            Yıllık Yenile
+          </Button>
+        ) : null}
+        {hasAction("customEnds") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setEndsAt("");
+              setQuickModal("subscription");
+            }}
+          >
+            Özel Süre Ekle
+          </Button>
+        ) : null}
+        {hasAction("startDemo") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setTrialDays("7");
+              setLicenseReason("");
+              setQuickModal("startDemo");
+            }}
+          >
+            Demo Başlat
+          </Button>
+        ) : null}
+        {hasAction("startAnnual") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setQuickModal("startAnnual");
+            }}
+          >
+            Yıllık Lisans Başlat
+          </Button>
+        ) : null}
+        {hasAction("suspendLicense") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setQuickModal("suspend");
+            }}
+          >
+            Askıya Al
+          </Button>
+        ) : null}
+        {hasAction("reactivateLicense") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setQuickModal("reactivate");
+            }}
+          >
+            Yeniden Etkinleştir
+          </Button>
+        ) : null}
+        {hasAction("manage") ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setLicenseReason("");
+              setEndsAt("");
+              setQuickModal("subscription");
+            }}
+          >
+            Lisansı Yönet
+          </Button>
+        ) : null}
+        {hasAction("note") ? (
+          <Button size="sm" variant="secondary" disabled={pending} onClick={() => setQuickModal("note")}>
             Admin Notu Ekle
           </Button>
-          {tenant.isActive ? (
-            <Button variant="secondary" className="w-full" onClick={() => setConfirm("deactivate")}>
-              Pasife Al
-            </Button>
-          ) : (
-            <Button variant="secondary" className="w-full" onClick={() => setConfirm("activate")}>
-              Aktifleştir
-            </Button>
-          )}
-          <div className="sm:col-span-2 lg:col-span-3 mt-1 border-t border-line pt-3">
-            <Button
-              variant="danger"
-              className="w-full sm:w-auto"
-              disabled={tenant.isProtected}
-              onClick={() => {
-                setDeleteConfirmName("");
-                setQuickModal("delete");
-              }}
-            >
-              Tenantı Kalıcı Olarak Sil
-            </Button>
-            {tenant.isProtected ? (
-              <p className="mt-2 text-caption text-muted">Korumalı ana tenant silinemez.</p>
-            ) : null}
-          </div>
-        </div>
-      </SectionCard>
+        ) : null}
+        {hasAction("deactivate") ? (
+          <Button size="sm" variant="secondary" onClick={() => setConfirm("deactivate")}>
+            Pasife Al
+          </Button>
+        ) : null}
+        {hasAction("activate") ? (
+          <Button size="sm" variant="secondary" onClick={() => setConfirm("activate")}>
+            Aktifleştir
+          </Button>
+        ) : null}
+      </AdminDetailQuickActions>
 
-      <DetailTabs
+      <AdminDetailTabs
         tabs={[
           { id: "genel", label: "Genel", icon: LayoutGrid },
           { id: "siteler", label: "Siteler", icon: Building2 },
           { id: "kullanicilar", label: "Kullanıcılar", icon: Users },
-          { id: "abonelik", label: "Abonelik", icon: CalendarDays },
+          { id: "abonelik", label: "Lisans", icon: CalendarDays },
           { id: "entegrasyonlar", label: "Entegrasyonlar", icon: Plug },
           { id: "gecmis", label: "İşlem Geçmişi", icon: History },
           { id: "notlar", label: "Admin Notları", icon: StickyNote },
@@ -360,190 +560,250 @@ export function AdminTenantDetailPage() {
         onChange={setTab}
       />
 
-      {tab === "genel" ? (
-        <SurfaceCard>
-          <h2 className="text-section text-ink">Genel Özet</h2>
-          <p className="mt-1 text-sm text-muted">Organizasyon kimliği ve mevcut kullanım durumu</p>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <InfoBox label="Organizasyon adı" value={dash(tenant.name)} />
-            <InfoBox label="Yönetici" value={dash(tenant.owner?.fullName)} />
-            <InfoBox label="Yönetici e-postası" value={dash(tenant.owner?.email)} />
-            <InfoBox label="Oluşturulma tarihi" value={formatDateTr(tenant.createdAt)} />
-            <InfoBox label="Slug" value={dash(tenant.slug)} />
-            <InfoBox label="Durum" value={tenant.isActive ? "Aktif" : "Pasif"} />
-          </div>
-        </SurfaceCard>
-      ) : null}
-
-      {tab === "siteler" ? (
-        <SurfaceCard padding="none">
-          {sites.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="Site kaydı yok" description="Bu tenant altında henüz site bulunmuyor." icon={Building2} />
-            </div>
-          ) : (
-            <Table>
-              <TableElement>
-                <THead>
-                  <TR>
-                    <TH>Site</TH>
-                    <TH>Şehir</TH>
-                    <TH>Bina</TH>
-                    <TH>Durum</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {sites.map((item) => (
-                    <TR key={item.id}>
-                      <TD>
-                        <Link href={`/app/admin/siteler/${item.id}`} className="hover:text-accent">
-                          {item.name}
-                        </Link>
-                      </TD>
-                      <TD>{[item.city, item.district].filter(Boolean).join(" / ") || "—"}</TD>
-                      <TD>{item.buildingCount}</TD>
-                      <TD>
-                        <StatusBadge active={item.isActive} />
-                      </TD>
-                    </TR>
+      <div className="mt-4">
+        {tab === "genel" ? (
+          <AdminDetailPanel
+            title="Genel Özet"
+            description="Organizasyon kimliği ve mevcut lisans durumu"
+          >
+            <AdminDetailInfoGrid wide>
+              <AdminDetailInfoBox label="Organizasyon adı" value={dash(tenant.name)} />
+              <AdminDetailInfoBox label="Yönetici" value={dash(tenant.owner?.fullName)} />
+              <AdminDetailInfoBox label="Yönetici e-postası" value={dash(tenant.owner?.email)} />
+              <AdminDetailInfoBox label="Oluşturulma tarihi" value={formatDateTr(tenant.createdAt)} />
+              <AdminDetailInfoBox label="Durum" value={tenant.isActive ? "Aktif" : "Pasif"} />
+              <AdminDetailInfoBox
+                label="Lisans"
+                value={
+                  sub
+                    ? `${PLAN_LABELS[sub.plan] ?? sub.plan} · ${SUB_STATUS_LABELS[sub.status] ?? sub.status}`
+                    : "Lisans yok"
+                }
+              />
+            </AdminDetailInfoGrid>
+            {needsIntervention ? (
+              <div className="mt-3 rounded-[12px] border border-rose-200/70 bg-rose-50/40 px-3 py-2.5">
+                <p className="text-[11px] font-medium text-rose-800">Müdahale nedenleri</p>
+                <ul className="mt-1 space-y-0.5 text-[12px] text-ink">
+                  {interventionReasons.map((reason) => (
+                    <li key={reason}>• {reason}</li>
                   ))}
-                </TBody>
-              </TableElement>
-            </Table>
-          )}
-        </SurfaceCard>
-      ) : null}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-3 text-[12px] text-muted">Müdahale durumu: Normal</p>
+            )}
+          </AdminDetailPanel>
+        ) : null}
 
-      {tab === "kullanicilar" ? (
-        <SurfaceCard padding="none">
-          {users.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="Kullanıcı kaydı yok" description="Bu tenant altında kullanıcı bulunmuyor." icon={Users} />
-            </div>
-          ) : (
-            <Table>
-              <TableElement>
-                <THead>
-                  <TR>
-                    <TH>Ad Soyad</TH>
-                    <TH>E-posta</TH>
-                    <TH>Rol</TH>
-                    <TH>Durum</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {users.map((item) => (
-                    <TR key={item.id}>
-                      <TD>
-                        <Link href={`/app/admin/kullanicilar/${item.id}`} className="hover:text-accent">
-                          {item.fullName}
-                        </Link>
-                      </TD>
-                      <TD className="max-w-[220px] break-all">{item.email}</TD>
-                      <TD>{roleLabel(item.role)}</TD>
-                      <TD>
-                        <StatusBadge active={item.isActive} />
-                      </TD>
+        {tab === "siteler" ? (
+          <AdminDetailPanel title="Siteler" bodyClassName="px-0 py-0">
+            {sites.length === 0 ? (
+              <div className="p-5">
+                <EmptyState title="Site kaydı yok" description="Bu tenant altında henüz site bulunmuyor." icon={Building2} />
+              </div>
+            ) : (
+              <Table>
+                <TableElement>
+                  <THead>
+                    <TR>
+                      <TH>Site</TH>
+                      <TH>Şehir</TH>
+                      <TH>Bina</TH>
+                      <TH>Durum</TH>
                     </TR>
-                  ))}
-                </TBody>
-              </TableElement>
-            </Table>
-          )}
-        </SurfaceCard>
-      ) : null}
+                  </THead>
+                  <TBody>
+                    {sites.map((item) => (
+                      <TR key={item.id}>
+                        <TD>
+                          <Link href={`/app/admin/siteler/${item.id}`} className="hover:text-accent">
+                            {item.name}
+                          </Link>
+                        </TD>
+                        <TD>{[item.city, item.district].filter(Boolean).join(" / ") || "—"}</TD>
+                        <TD>{item.buildingCount}</TD>
+                        <TD>
+                          <StatusBadge active={item.isActive} />
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </TableElement>
+              </Table>
+            )}
+          </AdminDetailPanel>
+        ) : null}
 
-      {tab === "abonelik" ? (
-        <SurfaceCard>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-[12px] border border-line bg-slate-50 p-4 sm:rounded-[14px]">
-              <h3 className="text-sm font-medium text-ink">Abonelik Bilgileri</h3>
-              <div className="mt-3 grid gap-3">
-                <InfoBox label="Abonelik türü" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
-                <InfoBox label="Durum" value={sub ? SUB_STATUS_LABELS[sub.status] ?? sub.status : "—"} />
-                <InfoBox label="Başlangıç tarihi" value={sub ? formatDateTr(sub.startsAt) : "—"} />
-                <InfoBox label="Bitiş tarihi" value={sub ? formatDateTr(sub.endsAt) : "—"} />
-                <InfoBox label="Kalan gün" value={sub ? String(sub.remainingDays) : "—"} />
+        {tab === "kullanicilar" ? (
+          <AdminDetailPanel title="Kullanıcılar" bodyClassName="px-0 py-0">
+            {users.length === 0 ? (
+              <div className="p-5">
+                <EmptyState title="Kullanıcı kaydı yok" description="Bu tenant altında kullanıcı bulunmuyor." icon={Users} />
+              </div>
+            ) : (
+              <Table>
+                <TableElement>
+                  <THead>
+                    <TR>
+                      <TH>Ad Soyad</TH>
+                      <TH>E-posta</TH>
+                      <TH>Rol</TH>
+                      <TH>Durum</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {users.map((item) => (
+                      <TR key={item.id}>
+                        <TD>
+                          <Link href={`/app/admin/kullanicilar/${item.id}`} className="hover:text-accent">
+                            {item.fullName}
+                          </Link>
+                        </TD>
+                        <TD className="max-w-[220px] break-all">{item.email}</TD>
+                        <TD>{roleLabel(item.role)}</TD>
+                        <TD>
+                          <StatusBadge active={item.isActive} />
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </TableElement>
+              </Table>
+            )}
+          </AdminDetailPanel>
+        ) : null}
+
+        {tab === "abonelik" ? (
+          <AdminDetailPanel title="Lisans" description="Organizasyon abonelik ve plan bilgileri">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-[12px] border border-line bg-slate-50 p-4 sm:rounded-[14px]">
+                <h3 className="text-sm font-medium text-ink">Lisans Bilgileri</h3>
+                <div className="mt-3 grid gap-3">
+                  <AdminDetailInfoBox label="Lisans türü" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
+                  <AdminDetailInfoBox label="Durum" value={sub ? SUB_STATUS_LABELS[sub.status] ?? sub.status : "—"} />
+                  <AdminDetailInfoBox label="Başlangıç tarihi" value={sub ? formatDateTr(sub.startsAt) : "—"} />
+                  <AdminDetailInfoBox label="Bitiş tarihi" value={sub ? formatDateTr(sub.endsAt) : "—"} />
+                  <AdminDetailInfoBox label="Kalan gün" value={sub ? String(sub.remainingDays) : "—"} />
+                </div>
+              </div>
+              <div className="rounded-[12px] border border-line bg-slate-50 p-4 sm:rounded-[14px]">
+                <h3 className="text-sm font-medium text-ink">Plan Bilgileri</h3>
+                <div className="mt-3 grid gap-3">
+                  <AdminDetailInfoBox label="Mevcut plan" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
+                  <AdminDetailInfoBox
+                    label="Demo / yıllık durumu"
+                    value={sub ? (sub.plan === "DEMO" ? "Demo" : "Yıllık lisans") : "—"}
+                  />
+                  <AdminDetailInfoBox label="Son değişiklik" value={sub?.updatedAt ? formatDateTr(sub.updatedAt) : "—"} />
+                  <AdminDetailInfoBox label="Abonelik notu" value={dash(sub?.note)} />
+                </div>
               </div>
             </div>
-            <div className="rounded-[12px] border border-line bg-slate-50 p-4 sm:rounded-[14px]">
-              <h3 className="text-sm font-medium text-ink">Plan Bilgileri</h3>
-              <div className="mt-3 grid gap-3">
-                <InfoBox label="Mevcut plan" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
-                <InfoBox
-                  label="Deneme / ücretli durumu"
-                  value={sub ? (sub.status === "TRIAL" ? "Deneme" : "Ücretli / lisans") : "—"}
-                />
-                <InfoBox label="Son değişiklik" value={sub?.updatedAt ? formatDateTr(sub.updatedAt) : "—"} />
-                <InfoBox label="Abonelik notu" value={dash(sub?.note)} />
+          </AdminDetailPanel>
+        ) : null}
+
+        {tab === "entegrasyonlar" ? (
+          <AdminDetailPanel title="Entegrasyonlar">
+            {tenant.whatsapp || tenant.email ? (
+              <AdminDetailInfoGrid>
+                <AdminDetailInfoBox label="WhatsApp" value={whatsappLabel} />
+                <AdminDetailInfoBox label="E-posta" value={emailLabel} />
+              </AdminDetailInfoGrid>
+            ) : (
+              <EmptyState title="Entegrasyon kaydı yok" description="Bu tenant için yerel bağlantı özeti bulunmuyor." icon={Plug} />
+            )}
+          </AdminDetailPanel>
+        ) : null}
+
+        {tab === "gecmis" ? (
+          <AdminDetailPanel title="İşlem Geçmişi" bodyClassName="px-0 py-0">
+            {logs.length === 0 ? (
+              <div className="p-5">
+                <EmptyState title="İşlem geçmişi yok" description="Bu tenant için henüz admin işlemi kaydı yok." icon={History} />
               </div>
-            </div>
-          </div>
-        </SurfaceCard>
-      ) : null}
-
-      {tab === "entegrasyonlar" ? (
-        <SurfaceCard>
-          {tenant.whatsapp || tenant.email ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <InfoBox label="WhatsApp" value={whatsappLabel} />
-              <InfoBox label="E-posta" value={emailLabel} />
-            </div>
-          ) : (
-            <EmptyState title="Entegrasyon kaydı yok" description="Bu tenant için yerel bağlantı özeti bulunmuyor." icon={Plug} />
-          )}
-        </SurfaceCard>
-      ) : null}
-
-      {tab === "gecmis" ? (
-        <SurfaceCard padding="none">
-          {logs.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="İşlem geçmişi yok" description="Bu tenant için henüz admin işlemi kaydı yok." icon={History} />
-            </div>
-          ) : (
-            <Table>
-              <TableElement>
-                <THead>
-                  <TR>
-                    <TH>İşlem</TH>
-                    <TH>Admin</TH>
-                    <TH>Tarih</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {logs.map((item) => (
-                    <TR key={item.id}>
-                      <TD>{AUDIT_ACTION_LABELS[item.action] ?? item.action}</TD>
-                      <TD>{item.adminUser.fullName}</TD>
-                      <TD>{formatDateTr(item.createdAt)}</TD>
+            ) : (
+              <Table>
+                <TableElement>
+                  <THead>
+                    <TR>
+                      <TH>İşlem</TH>
+                      <TH>Admin</TH>
+                      <TH>Tarih</TH>
                     </TR>
-                  ))}
-                </TBody>
-              </TableElement>
-            </Table>
-          )}
-        </SurfaceCard>
-      ) : null}
+                  </THead>
+                  <TBody>
+                    {logs.map((item) => (
+                      <TR key={item.id}>
+                        <TD>{AUDIT_ACTION_LABELS[item.action] ?? item.action}</TD>
+                        <TD>{item.adminUser.fullName}</TD>
+                        <TD>{formatDateTr(item.createdAt)}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </TableElement>
+              </Table>
+            )}
+          </AdminDetailPanel>
+        ) : null}
 
-      {tab === "notlar" ? (
-        <SurfaceCard>
-          {notes.length === 0 ? (
-            <EmptyState title="Admin notu yok" description="Hızlı işlemlerden not ekleyebilirsiniz." icon={FileText} />
-          ) : (
-            <ul className="divide-y divide-line">
-              {notes.map((item) => (
-                <li key={item.id} className="py-3 first:pt-0">
-                  <p className="text-sm text-ink">{item.content}</p>
-                  <p className="mt-1 text-caption text-muted">
-                    {item.adminUser.fullName} · {formatDateTr(item.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SurfaceCard>
-      ) : null}
+        {tab === "notlar" ? (
+          <AdminDetailPanel title="Admin Notları">
+            {notes.length === 0 ? (
+              <EmptyState title="Admin notu yok" description="Hızlı işlemlerden not ekleyebilirsiniz." icon={FileText} />
+            ) : (
+              <ul className="divide-y divide-line">
+                {notes.map((item) => (
+                  <li key={item.id} className="py-3 first:pt-0">
+                    <p className="text-sm text-ink">{item.content}</p>
+                    <p className="mt-1 text-caption text-muted">
+                      {item.adminUser.fullName} · {formatDateTr(item.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AdminDetailPanel>
+        ) : null}
+      </div>
+
+      <AdminDangerZone open={dangerOpen} onToggle={() => setDangerOpen((v) => !v)}>
+        {hardDeleteBlocked ? (
+          <div className="space-y-2">
+            <p className="text-[12px] text-rose-800">
+              Bu organizasyon geçmiş ve ilişkili kayıtları bulunduğu için kalıcı olarak silinemez. Pasife
+              alabilirsiniz.
+            </p>
+            {tenant.isProtected ? (
+              <p className="text-[11px] text-muted">Korumalı ana tenant silinemez.</p>
+            ) : (
+              <p className="text-[11px] text-muted">
+                Siteler: {relatedSites} · Kullanıcılar: {relatedUsers} · Borçlar: {relatedDebts} · Tahsilatlar:{" "}
+                {relatedPayments} · Giderler: {relatedExpenses}
+              </p>
+            )}
+            <Button size="sm" variant="secondary" onClick={() => setConfirm("deactivate")} disabled={!tenant.isActive}>
+              Pasife Al
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[12px] text-muted">
+              İlişkili site, kullanıcı veya finansal kayıt yoksa kalıcı silme açılabilir. İşlem geri alınamaz.
+            </p>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                setDeleteConfirmName("");
+                setQuickModal("delete");
+              }}
+            >
+              Organizasyonu Kalıcı Olarak Sil
+            </Button>
+          </div>
+        )}
+      </AdminDangerZone>
 
       <ConfirmDialog
         open={confirm === "deactivate"}
@@ -568,25 +828,34 @@ export function AdminTenantDetailPage() {
         title="Tenant düzenle"
         description="Kimlik alanları Genel sekmesinde görüntülenir. Bu fazda ad güncelleme endpoint’i yoktur."
         onClose={() => setQuickModal(null)}
-        footer={<Button variant="secondary" onClick={() => setQuickModal(null)}>Kapat</Button>}
+        footer={
+          <Button variant="secondary" onClick={() => setQuickModal(null)}>
+            Kapat
+          </Button>
+        }
       >
         <div className="grid gap-3">
-          <InfoBox label="Organizasyon" value={tenant.name} />
-          <InfoBox label="Yönetici" value={dash(tenant.owner?.fullName)} />
+          <ModalInfoBox label="Organizasyon" value={tenant.name} />
+          <ModalInfoBox label="Yönetici" value={dash(tenant.owner?.fullName)} />
         </div>
       </Modal>
 
       <Modal
-        open={quickModal === "trial"}
-        title="Deneme Süresi Ekle"
+        open={quickModal === "extend"}
+        title="Demo süresi uzat"
         onClose={() => setQuickModal(null)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setQuickModal(null)}>İptal</Button>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
             <Button
-              disabled={pending || !Number.isFinite(trialDaysNum) || trialDaysNum < 1}
+              disabled={pending || !Number.isFinite(trialDaysNum) || trialDaysNum < 1 || licenseReason.trim().length < 5}
               onClick={() =>
-                void run(() => trialAdminTenantSubscription(auth!, id, trialDaysNum), "Deneme süresi verildi.")
+                void run(
+                  () => extendAdminDemo(auth!, id, { days: trialDaysNum, reason: licenseReason.trim() }),
+                  "Demo süresi güncellendi.",
+                )
               }
             >
               Onayla
@@ -607,60 +876,305 @@ export function AdminTenantDetailPage() {
               data-modal-autofocus
             />
           </label>
-          <InfoBox label="Mevcut bitiş tarihi" value={sub ? formatDateTr(sub.endsAt) : "—"} />
-          <InfoBox label="İşlem sonrası yeni bitiş tarihi" value={trialPreview ? formatDateTr(trialPreview) : "—"} />
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+            />
+          </label>
+          <ModalInfoBox label="Mevcut bitiş tarihi" value={sub ? formatDateTr(sub.endsAt) : "—"} />
+          <ModalInfoBox label="İşlem sonrası yeni bitiş tarihi" value={trialPreview ? formatDateTr(trialPreview) : "—"} />
         </div>
       </Modal>
 
       <Modal
-        open={quickModal === "plan"}
-        title="Planı Değiştir"
+        open={quickModal === "startDemo"}
+        title="Demo başlat"
         onClose={() => setQuickModal(null)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setQuickModal(null)}>İptal</Button>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
             <Button
-              disabled={pending}
-              onClick={() => void run(() => changeAdminSubscriptionPlan(auth!, id, plan), "Plan güncellendi.")}
+              disabled={pending || !Number.isFinite(trialDaysNum) || trialDaysNum < 1 || licenseReason.trim().length < 5}
+              onClick={() =>
+                void run(
+                  () => startAdminDemo(auth!, id, { days: trialDaysNum, reason: licenseReason.trim() }),
+                  "Demo lisansı başlatıldı.",
+                )
+              }
             >
-              Planı Uygula
+              Başlat
             </Button>
           </>
         }
       >
         <div className="grid gap-3">
-          <InfoBox label="Mevcut plan" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
           <label className="text-sm text-ink">
-            Yeni plan
-            <Select className="mt-1" value={plan} onChange={(e) => setPlan(e.target.value)} data-modal-autofocus>
-              <option value="DEMO">Demo</option>
-              <option value="STANDARD">Standart</option>
-              <option value="PROFESSIONAL">Profesyonel</option>
-            </Select>
+            Demo gün sayısı
+            <Input
+              className="mt-1"
+              type="number"
+              min={1}
+              max={90}
+              value={trialDays}
+              onChange={(e) => setTrialDays(e.target.value)}
+              data-modal-autofocus
+            />
+          </label>
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+            />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        open={quickModal === "convert"}
+        title="Yıllığa dönüştür"
+        onClose={() => setQuickModal(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
+            <Button
+              disabled={pending || licenseReason.trim().length < 5}
+              onClick={() =>
+                void run(
+                  () => convertAdminAnnual(auth!, id, { reason: licenseReason.trim(), netPrice: 4000 }),
+                  "Yıllık lisansa dönüştürüldü.",
+                )
+              }
+            >
+              Dönüştür
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <ModalInfoBox label="Mevcut plan" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
+          <p className="text-[12px] text-muted">Varsayılan: 4.000 ₺ net + %20 KDV = 4.800 ₺</p>
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+              data-modal-autofocus
+            />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        open={quickModal === "startAnnual"}
+        title="Yıllık lisans başlat"
+        onClose={() => setQuickModal(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
+            <Button
+              disabled={pending || licenseReason.trim().length < 5}
+              onClick={() =>
+                void run(
+                  () => startAdminAnnual(auth!, id, { reason: licenseReason.trim(), netPrice: 4000 }),
+                  "Yıllık lisans başlatıldı.",
+                )
+              }
+            >
+              Başlat
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <p className="text-[12px] text-muted">Varsayılan: 4.000 ₺ net + %20 KDV = 4.800 ₺ · 365 gün</p>
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+              data-modal-autofocus
+            />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        open={quickModal === "renew"}
+        title="Yıllık yenile (365)"
+        onClose={() => setQuickModal(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
+            <Button
+              disabled={pending || licenseReason.trim().length < 5}
+              onClick={() =>
+                void run(
+                  () => renewAdminAnnual(auth!, id, { reason: licenseReason.trim() }),
+                  "Yıllık lisans yenilendi.",
+                )
+              }
+            >
+              Yenile
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <ModalInfoBox label="Mevcut bitiş" value={sub ? formatDateTr(sub.endsAt) : "—"} />
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+              data-modal-autofocus
+            />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        open={quickModal === "reactivate"}
+        title="Lisansı yeniden etkinleştir"
+        onClose={() => setQuickModal(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
+            <Button
+              disabled={pending || licenseReason.trim().length < 5}
+              onClick={() =>
+                void run(
+                  () => reactivateAdminSubscription(auth!, id, licenseReason.trim()),
+                  "Lisans yeniden etkinleştirildi.",
+                )
+              }
+            >
+              Etkinleştir
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <ModalInfoBox label="Mevcut durum" value={sub ? SUB_STATUS_LABELS[sub.status] ?? sub.status : "—"} />
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+              data-modal-autofocus
+            />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        open={quickModal === "suspend"}
+        title="Lisansı askıya al"
+        onClose={() => setQuickModal(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
+            <Button
+              variant="danger"
+              disabled={pending || licenseReason.trim().length < 5}
+              onClick={() =>
+                void run(
+                  () => suspendAdminSubscription(auth!, id, licenseReason.trim()),
+                  "Lisans askıya alındı.",
+                )
+              }
+            >
+              Askıya Al
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <p className="text-[12px] text-muted">
+            Askıya alınan organizasyon yazma işlemleri yapamaz. Yeniden etkinleştirme ile geri alınır.
+          </p>
+          <label className="text-sm text-ink">
+            Gerekçe
+            <Textarea
+              className="mt-1"
+              rows={2}
+              value={licenseReason}
+              onChange={(e) => setLicenseReason(e.target.value)}
+              data-modal-autofocus
+            />
           </label>
         </div>
       </Modal>
 
       <Modal
         open={quickModal === "subscription"}
-        title="Aboneliği Yönet"
+        title="Lisansı Yönet"
         onClose={() => setQuickModal(null)}
-        footer={<Button variant="secondary" onClick={() => setQuickModal(null)}>Kapat</Button>}
+        footer={
+          <Button variant="secondary" onClick={() => setQuickModal(null)}>
+            Kapat
+          </Button>
+        }
       >
+        <label className="mb-3 block text-sm text-ink">
+          Gerekçe
+          <Textarea
+            className="mt-1"
+            rows={2}
+            value={licenseReason}
+            onChange={(e) => setLicenseReason(e.target.value)}
+          />
+        </label>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button
             variant="secondary"
-            disabled={pending}
-            onClick={() => void run(() => extendAdminTenantSubscription(auth!, id, { days: 7 }), "+7 gün uygulandı.")}
+            disabled={pending || licenseReason.trim().length < 5}
+            onClick={() =>
+              void run(
+                () => extendAdminDemo(auth!, id, { days: 3, reason: licenseReason.trim() }),
+                "+3 gün uygulandı.",
+              )
+            }
           >
-            +7 gün
+            +3 gün
           </Button>
           <Button
             variant="secondary"
-            disabled={pending}
-            onClick={() => void run(() => extendAdminTenantSubscription(auth!, id, { days: 30 }), "+30 gün uygulandı.")}
+            disabled={pending || licenseReason.trim().length < 5}
+            onClick={() =>
+              void run(
+                () => extendAdminDemo(auth!, id, { days: 7, reason: licenseReason.trim() }),
+                "+7 gün uygulandı.",
+              )
+            }
           >
-            +30 gün
+            +7 gün
           </Button>
         </div>
         <label className="mt-4 block text-sm text-ink">
@@ -669,10 +1183,14 @@ export function AdminTenantDetailPage() {
         </label>
         <Button
           className="mt-3 w-full sm:w-auto"
-          disabled={!endsAt || pending}
+          disabled={!endsAt || pending || licenseReason.trim().length < 5}
           onClick={() =>
             void run(
-              () => extendAdminTenantSubscription(auth!, id, { endsAt: new Date(endsAt).toISOString() }),
+              () =>
+                extendAdminTenantSubscription(auth!, id, {
+                  endsAt: new Date(endsAt).toISOString(),
+                  reason: licenseReason.trim(),
+                }),
               "Bitiş tarihi güncellendi.",
             )
           }
@@ -687,7 +1205,9 @@ export function AdminTenantDetailPage() {
         onClose={() => setQuickModal(null)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setQuickModal(null)}>İptal</Button>
+            <Button variant="secondary" onClick={() => setQuickModal(null)}>
+              İptal
+            </Button>
             <Button
               disabled={pending || !note.trim()}
               onClick={() =>
@@ -744,14 +1264,14 @@ export function AdminTenantDetailPage() {
         }
       >
         <div className="grid grid-cols-2 gap-2">
-          <InfoBox label="Tenant" value={tenant.name} />
-          <InfoBox label="Siteler" value={String(tenant.recordCounts?.sites ?? tenant.usage.sites)} />
-          <InfoBox label="Daireler" value={String(tenant.recordCounts?.apartments ?? tenant.usage.apartments)} />
-          <InfoBox label="Kullanıcılar" value={String(tenant.recordCounts?.users ?? tenant.usage.users)} />
-          <InfoBox label="Kişiler" value={String(tenant.recordCounts?.persons ?? tenant.usage.persons)} />
-          <InfoBox label="Borçlar" value={String(tenant.recordCounts?.debts ?? 0)} />
-          <InfoBox label="Tahsilatlar" value={String(tenant.recordCounts?.payments ?? 0)} />
-          <InfoBox label="Giderler" value={String(tenant.recordCounts?.expenses ?? 0)} />
+          <ModalInfoBox label="Tenant" value={tenant.name} />
+          <ModalInfoBox label="Siteler" value={String(tenant.recordCounts?.sites ?? tenant.usage.sites)} />
+          <ModalInfoBox label="Daireler" value={String(tenant.recordCounts?.apartments ?? tenant.usage.apartments)} />
+          <ModalInfoBox label="Kullanıcılar" value={String(tenant.recordCounts?.users ?? tenant.usage.users)} />
+          <ModalInfoBox label="Kişiler" value={String(tenant.recordCounts?.persons ?? tenant.usage.persons)} />
+          <ModalInfoBox label="Borçlar" value={String(tenant.recordCounts?.debts ?? 0)} />
+          <ModalInfoBox label="Tahsilatlar" value={String(tenant.recordCounts?.payments ?? 0)} />
+          <ModalInfoBox label="Giderler" value={String(tenant.recordCounts?.expenses ?? 0)} />
         </div>
         <label className="mt-4 block text-sm text-ink">
           Onay için tenant adını birebir yazın
@@ -764,6 +1284,6 @@ export function AdminTenantDetailPage() {
           />
         </label>
       </Modal>
-    </PageContainer>
+    </AdminDetailShell>
   );
 }

@@ -38,8 +38,8 @@ export function SiteOnboardingGate({ children }: { children: React.ReactNode }) 
   if (status === "noSites" || !hasSites) {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-start gap-4 px-6 py-16">
-        <h1 className="text-2xl font-semibold text-ink">İlk sitenizi oluşturun</h1>
-        <p className="text-sm text-muted">
+        <h1 className="text-page text-ink">İlk sitenizi oluşturun</h1>
+        <p className="text-[13px] text-muted">
           Bina ve daire yönetimine başlamak için önce bir site oluşturmanız gerekiyor.
         </p>
         <Link href="/app/siteler">

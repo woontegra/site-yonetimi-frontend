@@ -211,13 +211,13 @@ export function PersonsPage() {
 
       {filtersOpen ? (
         <div className="mb-4 grid grid-cols-1 gap-3 rounded-md border border-line bg-white p-3 sm:grid-cols-3">
-          <Select className="h-10 text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <Select className="text-sm" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">Tüm durumlar</option>
             <option value="aktif">Aktif</option>
             <option value="pasif">Pasif</option>
           </Select>
           <Select
-            className="h-10 text-sm"
+            className="text-sm"
             value={relationType}
             onChange={(event) => setRelationType(event.target.value)}
           >
@@ -229,7 +229,7 @@ export function PersonsPage() {
             ))}
           </Select>
           <Select
-            className="h-10 text-sm"
+            className="text-sm"
             value={buildingId}
             onChange={(event) => setBuildingId(event.target.value)}
           >

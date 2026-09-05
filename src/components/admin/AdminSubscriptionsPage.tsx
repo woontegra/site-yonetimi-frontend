@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
@@ -11,45 +12,107 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Table, TableElement, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { TableEmptyState } from "@/components/ui/TableEmptyState";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Textarea } from "@/components/ui/Textarea";
+import { StatCard } from "@/components/ui/SurfaceCard";
 import { useToast } from "@/components/ui/Toast";
 import { PLAN_LABELS, SUB_STATUS_LABELS, remainingLabel, subscriptionTone } from "@/components/admin/labels";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useAuth } from "@/lib/auth-context";
 import { useAdminAuth } from "@/lib/active-site-context";
 import {
-  changeAdminSubscriptionPlan,
-  extendAdminSubscription,
+  cancelAdminSubscription,
+  convertAdminAnnual,
+  extendAdminDemo,
+  getAdminSubscriptionSummary,
   listAdminSubscriptions,
   reactivateAdminSubscription,
+  renewAdminAnnual,
   suspendAdminSubscription,
   type AdminSubscriptionListItem,
+  type AdminSubscriptionSummary,
 } from "@/lib/admin-api";
 import { ApiError } from "@/lib/http";
-import { formatDateTr } from "@/lib/money";
+import { formatDateTr, formatMoney } from "@/lib/money";
 
 const PER_PAGE = 20;
+const ANNUAL_NET = 4000;
+const ANNUAL_VAT_RATE = 20;
+
+type FilterKey =
+  | ""
+  | "demo"
+  | "annual"
+  | "active"
+  | "expiring"
+  | "expired"
+  | "suspended"
+  | "cancelled"
+  | "none";
+
+type PendingAction =
+  | { type: "extend"; tenantId: string; days: number }
+  | { type: "extendCustom"; tenantId: string }
+  | { type: "convert"; tenantId: string }
+  | { type: "renew"; tenantId: string }
+  | { type: "suspend"; tenantId: string }
+  | { type: "reactivate"; tenantId: string }
+  | { type: "cancel"; tenantId: string };
+
+const FILTERS: Array<{ key: FilterKey; label: string }> = [
+  { key: "", label: "Tümü" },
+  { key: "demo", label: "Demo" },
+  { key: "annual", label: "Yıllık" },
+  { key: "active", label: "Aktif" },
+  { key: "expiring", label: "Yaklaşan" },
+  { key: "expired", label: "Süresi dolmuş" },
+  { key: "suspended", label: "Askıda" },
+  { key: "cancelled", label: "İptal" },
+  { key: "none", label: "Lisanssız" },
+];
+
+function filterParams(filter: FilterKey): { status?: string; plan?: string; filter?: string } {
+  if (filter === "demo") return { plan: "DEMO" };
+  if (filter === "annual") return { plan: "ANNUAL" };
+  if (filter === "active") return { status: "ACTIVE" };
+  if (filter === "expired") return { status: "EXPIRED" };
+  if (filter === "suspended") return { status: "SUSPENDED" };
+  if (filter === "cancelled") return { status: "CANCELLED" };
+  if (filter === "expiring") return { filter: "expiring" };
+  if (filter === "none") return { filter: "none" };
+  return {};
+}
 
 export function AdminSubscriptionsPage() {
   const { ready } = useAuth();
   const auth = useAdminAuth();
+  const searchParams = useSearchParams();
   const { showToast, toastError } = useToast();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [filter, setFilter] = useState<FilterKey>((searchParams.get("filter") as FilterKey) || "");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [items, setItems] = useState<AdminSubscriptionListItem[]>([]);
+  const [summary, setSummary] = useState<AdminSubscriptionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [endsAtOpen, setEndsAtOpen] = useState<string | null>(null);
-  const [endsAt, setEndsAt] = useState("");
-  const [planOpen, setPlanOpen] = useState<string | null>(null);
-  const [plan, setPlan] = useState("STANDARD");
-  const [suspendId, setSuspendId] = useState<string | null>(null);
+  const [action, setAction] = useState<PendingAction | null>(null);
+  const [reason, setReason] = useState("");
+  const [customDays, setCustomDays] = useState("14");
+  const [paymentNote, setPaymentNote] = useState("");
   const debouncedSearch = useDebouncedValue(search);
+
+  const loadSummary = useCallback(async () => {
+    if (!auth) return;
+    try {
+      setSummary(await getAdminSubscriptionSummary(auth));
+    } catch {
+      setSummary(null);
+    }
+  }, [auth]);
 
   const load = useCallback(async () => {
     if (!auth) return;
@@ -60,7 +123,7 @@ export function AdminSubscriptionsPage() {
         page,
         perPage: PER_PAGE,
         search: debouncedSearch,
-        status: status || undefined,
+        ...filterParams(filter),
       });
       setItems(result.items);
       setTotal(result.total);
@@ -69,58 +132,134 @@ export function AdminSubscriptionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [auth, page, debouncedSearch, status]);
+  }, [auth, page, debouncedSearch, filter]);
 
-  useEffect(() => setPage(1), [debouncedSearch, status]);
+  useEffect(() => setPage(1), [debouncedSearch, filter]);
   useEffect(() => {
     if (!ready) return;
     void load();
-  }, [ready, load]);
+    void loadSummary();
+  }, [ready, load, loadSummary]);
 
-  async function run(action: () => Promise<unknown>, message: string) {
+  function openAction(next: PendingAction) {
+    setAction(next);
+    setReason("");
+    setPaymentNote("");
+    if (next.type === "extendCustom") setCustomDays("14");
+  }
+
+  async function confirmAction() {
+    if (!auth || !action) return;
+    if (reason.trim().length < 5) {
+      showToast("Gerekçe en az 5 karakter olmalıdır.", "error");
+      return;
+    }
     setPending(true);
     try {
-      await action();
-      showToast(message);
-      await load();
+      const r = reason.trim();
+      if (action.type === "extend") {
+        await extendAdminDemo(auth, action.tenantId, { days: action.days, reason: r });
+        showToast(`Demo ${action.days} gün uzatıldı.`);
+      } else if (action.type === "extendCustom") {
+        const days = Number(customDays);
+        if (!Number.isInteger(days) || days < 1) {
+          showToast("Geçerli bir gün sayısı girin.", "error");
+          setPending(false);
+          return;
+        }
+        await extendAdminDemo(auth, action.tenantId, { days, reason: r });
+        showToast(`Demo ${days} gün uzatıldı.`);
+      } else if (action.type === "convert") {
+        await convertAdminAnnual(auth, action.tenantId, {
+          reason: r,
+          netPrice: ANNUAL_NET,
+          paymentNote: paymentNote.trim() || undefined,
+        });
+        showToast("Yıllık lisansa dönüştürüldü.");
+      } else if (action.type === "renew") {
+        await renewAdminAnnual(auth, action.tenantId, {
+          reason: r,
+          paymentNote: paymentNote.trim() || undefined,
+        });
+        showToast("Yıllık lisans 365 gün yenilendi.");
+      } else if (action.type === "suspend") {
+        await suspendAdminSubscription(auth, action.tenantId, r);
+        showToast("Abonelik askıya alındı.");
+      } else if (action.type === "reactivate") {
+        await reactivateAdminSubscription(auth, action.tenantId, r);
+        showToast("Abonelik yeniden etkinleştirildi.");
+      } else {
+        await cancelAdminSubscription(auth, action.tenantId, r);
+        showToast("Abonelik iptal edildi.");
+      }
+      setAction(null);
+      await Promise.all([load(), loadSummary()]);
     } catch (err) {
-      toastError(err, "İşlem tamamlanamadı.");
+      toastError(err, "Lisans güncellenemedi.");
     } finally {
       setPending(false);
-      setSuspendId(null);
-      setEndsAtOpen(null);
-      setPlanOpen(null);
     }
   }
+
+  const actionTitle =
+    action?.type === "extend"
+      ? `+${action.days} gün uzat`
+      : action?.type === "extendCustom"
+        ? "Özel gün uzat"
+        : action?.type === "convert"
+          ? "Yıllığa dönüştür"
+          : action?.type === "renew"
+            ? "365 gün yenile"
+            : action?.type === "suspend"
+              ? "Askıya al"
+              : action?.type === "reactivate"
+                ? "Yeniden etkinleştir"
+                : action?.type === "cancel"
+                  ? "İptal et"
+                  : "";
+
+  const grossPreview = ANNUAL_NET * (1 + ANNUAL_VAT_RATE / 100);
 
   return (
     <PageContainer>
       <PageHeader
-        title="Abonelikler"
-        description="Tenant lisans ve deneme süreleri."
-        search={<SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tenant adı" />}
+        title="Lisans Yönetimi"
+        description="Organizasyon düzeyinde Demo ve Yıllık lisans işlemleri."
+        search={<SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Organizasyon adı" />}
         actions={
-          <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-40">
-            <option value="">Tümü</option>
-            <option value="TRIAL">Trial</option>
-            <option value="ACTIVE">Active</option>
-            <option value="EXPIRED">Expired</option>
-            <option value="SUSPENDED">Suspended</option>
+          <Select value={filter} onChange={(e) => setFilter(e.target.value as FilterKey)} className="w-44">
+            {FILTERS.map((item) => (
+              <option key={item.key || "all"} value={item.key}>
+                {item.label}
+              </option>
+            ))}
           </Select>
         }
       />
-      {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
+
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+        <StatCard label="Demo" value={String(summary?.demo ?? summary?.demoActive ?? "—")} />
+        <StatCard label="Yıllık" value={String(summary?.annual ?? summary?.annualActive ?? "—")} />
+        <StatCard label="Aktif" value={String(summary?.active ?? "—")} />
+        <StatCard label="Yaklaşan" value={String(summary?.expiring ?? "—")} />
+        <StatCard label="Süresi dolmuş" value={String(summary?.expired ?? "—")} />
+        <StatCard label="Askıda" value={String(summary?.suspended ?? "—")} />
+        <StatCard label="İptal" value={String(summary?.cancelled ?? "—")} />
+        <StatCard label="Lisanssız" value={String(summary?.none ?? "—")} />
+      </div>
+
+      {error ? <p className="mb-3 text-[12px] text-danger">{error}</p> : null}
       <Table>
         <TableElement>
           <THead>
             <TR>
-              <TH>Tenant</TH>
+              <TH>Organizasyon</TH>
               <TH>Plan</TH>
               <TH>Durum</TH>
               <TH>Başlangıç</TH>
               <TH>Bitiş</TH>
-              <TH>Kalan gün</TH>
-              <TH>Siteler</TH>
+              <TH>Kalan</TH>
+              <TH>Fiyat</TH>
               <TH>İşlem</TH>
             </TR>
           </THead>
@@ -136,29 +275,44 @@ export function AdminSubscriptionsPage() {
                     <Link href={`/app/admin/tenantlar/${item.tenant.id}`} className="font-medium hover:text-accent">
                       {item.tenant.name}
                     </Link>
+                    {item.readOnly ? <p className="text-caption text-muted">Salt okunur</p> : null}
                   </TD>
-                  <TD>{PLAN_LABELS[item.plan]}</TD>
+                  <TD>{PLAN_LABELS[item.plan] ?? item.plan}</TD>
                   <TD>
-                    <div>
-                      <StatusBadge label={SUB_STATUS_LABELS[item.status]} tone={subscriptionTone(item.status)} />
-                      {remainingLabel(item) ? <p className="mt-1 text-caption text-muted">{remainingLabel(item)}</p> : null}
-                    </div>
+                    <StatusBadge
+                      label={SUB_STATUS_LABELS[item.status] ?? item.status}
+                      tone={subscriptionTone(item.status, item.plan)}
+                    />
+                    {remainingLabel(item) ? <p className="mt-1 text-caption text-muted">{remainingLabel(item)}</p> : null}
                   </TD>
                   <TD>{formatDateTr(item.startsAt)}</TD>
                   <TD>{formatDateTr(item.endsAt)}</TD>
                   <TD>{item.remainingDays}</TD>
-                  <TD>{item.tenant.siteCount}</TD>
+                  <TD>
+                    {item.plan === "ANNUAL" && item.grossPrice != null
+                      ? formatMoney(item.grossPrice)
+                      : item.plan === "ANNUAL" && item.netPrice != null
+                        ? formatMoney(item.netPrice)
+                        : "—"}
+                  </TD>
                   <TD>
                     <div className="flex flex-wrap gap-1">
-                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => void run(() => extendAdminSubscription(auth!, item.tenant.id, { days: 7 }), "+7 gün")}>+7</Button>
-                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => void run(() => extendAdminSubscription(auth!, item.tenant.id, { days: 30 }), "+30 gün")}>+30</Button>
-                      <Button size="sm" variant="secondary" onClick={() => { setEndsAtOpen(item.tenant.id); setEndsAt(item.endsAt.slice(0, 10)); }}>Tarih</Button>
-                      <Button size="sm" variant="secondary" onClick={() => { setPlanOpen(item.tenant.id); setPlan(item.plan); }}>Plan</Button>
-                      {item.status === "SUSPENDED" ? (
-                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => void run(() => reactivateAdminSubscription(auth!, item.tenant.id), "Yeniden aktif")}>Aktif et</Button>
+                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "extend", tenantId: item.tenant.id, days: 3 })}>+3</Button>
+                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "extend", tenantId: item.tenant.id, days: 7 })}>+7</Button>
+                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "extendCustom", tenantId: item.tenant.id })}>Özel</Button>
+                      {item.plan !== "ANNUAL" ? (
+                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "convert", tenantId: item.tenant.id })}>Yıllık</Button>
                       ) : (
-                        <Button size="sm" variant="secondary" onClick={() => setSuspendId(item.tenant.id)}>Askıya al</Button>
+                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "renew", tenantId: item.tenant.id })}>Yenile</Button>
                       )}
+                      {item.status === "SUSPENDED" ? (
+                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "reactivate", tenantId: item.tenant.id })}>Aktif et</Button>
+                      ) : item.status !== "CANCELLED" ? (
+                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "suspend", tenantId: item.tenant.id })}>Askıya al</Button>
+                      ) : null}
+                      {item.status !== "CANCELLED" ? (
+                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "cancel", tenantId: item.tenant.id })}>İptal</Button>
+                      ) : null}
                     </div>
                   </TD>
                 </TR>
@@ -169,44 +323,40 @@ export function AdminSubscriptionsPage() {
       </Table>
       <Pagination page={page} perPage={PER_PAGE} total={total} onPageChange={setPage} />
 
-      <ConfirmDialog
-        open={Boolean(suspendId)}
-        title="Abonelik askıya alınsın mı?"
-        description="Tenant aboneliği SUSPENDED olur."
-        danger
-        pending={pending}
-        onClose={() => setSuspendId(null)}
-        onConfirm={() => void run(() => suspendAdminSubscription(auth!, suspendId!), "Askıya alındı.")}
-      />
       <Modal
-        open={Boolean(endsAtOpen)}
-        title="Özel bitiş tarihi"
-        onClose={() => setEndsAtOpen(null)}
+        open={Boolean(action)}
+        title={actionTitle}
+        description="Değişiklik denetim kaydına yazılır. Gerekçe zorunludur."
+        onClose={() => (pending ? undefined : setAction(null))}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setEndsAtOpen(null)}>Vazgeç</Button>
-            <Button disabled={!endsAt || pending} onClick={() => void run(() => extendAdminSubscription(auth!, endsAtOpen!, { endsAt: new Date(endsAt).toISOString() }), "Bitiş güncellendi.")}>Kaydet</Button>
+            <Button variant="secondary" disabled={pending} onClick={() => setAction(null)}>Vazgeç</Button>
+            <Button disabled={pending} onClick={() => void confirmAction()}>
+              {pending ? "Kaydediliyor…" : "Onayla"}
+            </Button>
           </>
         }
       >
-        <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
-      </Modal>
-      <Modal
-        open={Boolean(planOpen)}
-        title="Plan değiştir"
-        onClose={() => setPlanOpen(null)}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setPlanOpen(null)}>Vazgeç</Button>
-            <Button disabled={pending} onClick={() => void run(() => changeAdminSubscriptionPlan(auth!, planOpen!, plan), "Plan değişti.")}>Kaydet</Button>
-          </>
-        }
-      >
-        <Select value={plan} onChange={(e) => setPlan(e.target.value)}>
-          <option value="DEMO">Demo</option>
-          <option value="STANDARD">Standart</option>
-          <option value="PROFESSIONAL">Profesyonel</option>
-        </Select>
+        <div className="space-y-3">
+          {action?.type === "extendCustom" ? (
+            <FormField label="Gün sayısı" required>
+              <Input type="number" min={1} max={365} value={customDays} onChange={(e) => setCustomDays(e.target.value)} />
+            </FormField>
+          ) : null}
+          {action?.type === "convert" ? (
+            <p className="rounded-md border border-line bg-canvas/50 px-3 py-2 text-[12px] text-muted">
+              Varsayılan fiyat: {formatMoney(ANNUAL_NET)} net + %{ANNUAL_VAT_RATE} KDV = {formatMoney(grossPreview)}
+            </p>
+          ) : null}
+          {action?.type === "convert" || action?.type === "renew" ? (
+            <FormField label="Ödeme notu" hint="İsteğe bağlı">
+              <Input value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} placeholder="Havale ref / fatura no" />
+            </FormField>
+          ) : null}
+          <FormField label="Gerekçe" required hint="Örn. Müşteri talebiyle demo 7 gün uzatıldı.">
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} data-modal-autofocus />
+          </FormField>
+        </div>
       </Modal>
     </PageContainer>
   );

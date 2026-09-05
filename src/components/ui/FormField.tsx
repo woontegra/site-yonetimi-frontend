@@ -22,8 +22,8 @@ export function FormField({
   className,
 }: FormFieldProps) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
-      <label htmlFor={htmlFor} className="break-words text-[13px] font-medium text-ink">
+    <div className={cn("flex min-w-0 flex-col gap-1", className)}>
+      <label htmlFor={htmlFor} className="break-words text-[12px] font-medium leading-[1.25] text-ink">
         {label}
         {required ? (
           <span className="ml-0.5 text-[11px] font-medium text-danger" aria-hidden>
@@ -32,16 +32,14 @@ export function FormField({
         ) : null}
       </label>
       {children}
-      <div className="min-h-[18px]">
-        {error ? (
-          <p className="flex items-start gap-1 text-[12px] leading-[18px] text-danger">
-            <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-            {error}
-          </p>
-        ) : hint ? (
-          <p className="break-words text-[12px] leading-[18px] text-muted">{hint}</p>
-        ) : null}
-      </div>
+      {error ? (
+        <p className="flex items-start gap-1 text-[11px] leading-[1.35] text-danger">
+          <CircleAlert className="mt-px size-3 shrink-0" aria-hidden />
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="break-words text-[11px] leading-[1.35] text-muted">{hint}</p>
+      ) : null}
     </div>
   );
 }

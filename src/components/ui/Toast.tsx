@@ -199,27 +199,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               key={item.id}
               role={ui.role}
               className={cn(
-                "pointer-events-auto flex gap-3 rounded-xl border px-3.5 py-3 shadow-[var(--shadow-panel-hover)] motion-reduce:transition-none",
+                "pointer-events-auto flex gap-2.5 rounded-lg border px-3 py-2.5 shadow-[var(--shadow-panel-hover)] motion-reduce:transition-none",
                 ui.panel,
               )}
             >
               <span
                 className={cn(
-                  "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg",
+                  "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md",
                   ui.iconBox,
                 )}
               >
-                <Icon className="size-4" aria-hidden />
+                <Icon className="size-3.5" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink">{item.title}</p>
+                <p className="text-[13px] font-medium leading-[1.35] text-ink">{item.title}</p>
                 {item.description ? (
-                  <p className="mt-0.5 whitespace-pre-line text-sm text-muted">{item.description}</p>
+                  <p className="mt-0.5 whitespace-pre-line text-[12px] font-normal leading-[1.35] text-muted">
+                    {item.description}
+                  </p>
                 ) : null}
                 {item.action ? (
                   <button
                     type="button"
-                    className="mt-2 text-sm font-medium text-accent underline-offset-2 hover:underline"
+                    className="mt-1.5 text-[12px] font-medium text-accent underline-offset-2 hover:underline"
                     onClick={() => {
                       item.action?.onClick();
                       dismissToast(item.id);
@@ -235,7 +237,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 aria-label="Bildirimi kapat"
                 onClick={() => dismissToast(item.id)}
               >
-                <X className="size-4" aria-hidden />
+                <X className="size-3.5" aria-hidden />
               </button>
             </div>
           );

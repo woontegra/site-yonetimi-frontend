@@ -200,7 +200,7 @@ export function DebtsPage() {
         perPage: PER_PAGE,
         buildingId: buildingId || undefined,
         status: status === "OPEN" || status === "PAID" || status === "CANCELLED" ? status : undefined,
-        type: type === "DUES" || type === "MANUAL" ? type : undefined,
+        type: type === "DUES" || type === "MANUAL" || type === "INTEREST" ? type : undefined,
         dueFrom: dueFrom || undefined,
         dueTo: dueTo || undefined,
       });
@@ -406,6 +406,7 @@ export function DebtsPage() {
             <option value="">Tüm borç tipleri</option>
             <option value="DUES">Aidat</option>
             <option value="MANUAL">Manuel</option>
+            <option value="INTEREST">Gecikme Faizi</option>
           </Select>
           <Select value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">Tüm durumlar</option>

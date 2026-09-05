@@ -139,7 +139,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg bg-canvas px-3 py-2">
       <p className="text-[11px] text-muted">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-semibold text-ink">{value}</p>
+      <p className="mt-0.5 truncate text-[13px] font-medium text-ink">{value}</p>
     </div>
   );
 }

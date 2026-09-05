@@ -7,13 +7,16 @@ import {
   ClipboardList,
   Cog,
   DoorOpen,
+  FileBarChart2,
   Landmark,
   LayoutDashboard,
   MapPinned,
   MessageCircle,
   MessageSquare,
+  Percent,
   Plug,
   Receipt,
+  Shield,
   TrendingDown,
   Truck,
   UserRound,
@@ -68,6 +71,18 @@ export const navSections: NavSection[] = [
       { href: "/app/muhasebe/tahsilatlar", label: "Tahsilatlar", icon: Banknote, permission: "payments.view" },
       { href: "/app/muhasebe/giderler", label: "Giderler", icon: TrendingDown, permission: "expenses.view" },
       { href: "/app/muhasebe/bankalar", label: "Banka", icon: Landmark, permission: "banks.view" },
+      {
+        href: "/app/muhasebe/faiz-kararlari",
+        label: "Faiz Kararları",
+        icon: Percent,
+        permission: ["interest.view", "interest.manage"],
+      },
+      {
+        href: "/app/muhasebe/raporlar",
+        label: "Raporlar",
+        icon: FileBarChart2,
+        permission: "financeReports.view",
+      },
     ],
   },
   {
@@ -128,16 +143,20 @@ export const adminNavSections: NavSection[] = [
   {
     id: "genel",
     label: "Genel",
-    items: [{ href: "/app/admin", label: "Genel Bakış", icon: LayoutDashboard }],
+    items: [
+      { href: "/app/admin", label: "Admin Paneli", icon: Shield },
+      { href: "/app/admin/kontrol-merkezi", label: "Kontrol Merkezi", icon: LayoutDashboard },
+    ],
   },
   {
     id: "musteriler",
     label: "Müşteriler",
     items: [
-      { href: "/app/admin/tenantlar", label: "Tenantlar", icon: Briefcase },
+      { href: "/app/admin/tenantlar", label: "Organizasyonlar", icon: Briefcase },
       { href: "/app/admin/siteler", label: "Siteler", icon: MapPinned },
       { href: "/app/admin/kullanicilar", label: "Kullanıcılar", icon: Users },
-      { href: "/app/admin/abonelikler", label: "Abonelikler", icon: Wallet },
+      { href: "/app/admin/abonelikler", label: "Lisanslar", icon: Wallet },
+      { href: "/app/admin/istatistikler", label: "İstatistikler", icon: FileBarChart2 },
     ],
   },
   {
@@ -152,8 +171,15 @@ export const adminNavSections: NavSection[] = [
     id: "sistem",
     label: "Sistem",
     items: [
-      { href: "/app/admin/sistem", label: "Sistem Durumu", icon: Cog },
+      { href: "/app/admin/sistem", label: "Sistem Sağlığı", icon: Cog },
       { href: "/app/admin/denetim", label: "Denetim Kayıtları", icon: ClipboardList },
     ],
   },
 ];
+
+/** Normal sidebar’da yalnız platform admin’e render edilen bölüm. */
+export const platformNavSection: NavSection = {
+  id: "platform",
+  label: "Platform Yönetimi",
+  items: [{ href: "/app/admin", label: "Admin Paneli", icon: Shield }],
+};

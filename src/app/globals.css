@@ -119,16 +119,32 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --text-page: 1.375rem;
-  --text-section: 1rem;
-  --text-card: 0.9375rem;
-  --text-body: 0.875rem;
-  --text-muted: 0.8125rem;
-  --text-caption: 0.75rem;
+  /* Compact SaaS typography (aligned with Settings density) */
+  --text-page: 1.25rem; /* 20px */
+  --text-section: 0.875rem; /* 14px */
+  --text-card: 0.875rem; /* 14px */
+  --text-modal: 0.9375rem; /* 15px */
+  --text-body: 0.8125rem; /* 13px */
+  --text-muted: 0.75rem; /* 12px */
+  --text-caption: 0.6875rem; /* 11px */
+  --text-stat: 1.125rem; /* 18px */
 
-  --header-height: 56px;
+  --control-h: 2.25rem; /* 36px desktop */
+  --control-h-sm: 2rem; /* 32px */
+  --control-h-lg: 2.5rem; /* 40px */
+
+  --header-height: 52px;
   --sidebar-width: 264px;
   --sidebar-collapsed: 76px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --text-body: 0.875rem; /* 14px */
+    --text-muted: 0.8125rem; /* 13px */
+    --control-h: 2.75rem; /* 44px touch */
+    --control-h-sm: 2.5rem; /* 40px */
+  }
 }
 
 html,
@@ -144,9 +160,10 @@ html {
 body {
   background: var(--color-canvas);
   color: var(--color-ink);
+  font-size: var(--text-body);
   font-weight: 400;
-  line-height: 1.5;
-  letter-spacing: 0.01em;
+  line-height: 1.4;
+  letter-spacing: normal;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
