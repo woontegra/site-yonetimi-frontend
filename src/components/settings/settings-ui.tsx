@@ -236,10 +236,12 @@ export function SettingsInfoGrid({
   columns = "auto",
 }: {
   items: Array<{ label: string; value: ReactNode; hint?: ReactNode }>;
-  columns?: "auto" | 4 | 5 | 6;
+  columns?: "auto" | 3 | 4 | 5 | 6;
 }) {
   const gridClass =
-    columns === 4
+    columns === 3
+      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      : columns === 4
       ? "grid-cols-2 sm:grid-cols-4"
       : columns === 5
         ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"

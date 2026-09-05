@@ -6,7 +6,9 @@ import { usePathname } from "next/navigation";
 import { useApiAuth } from "@/lib/active-site-context";
 import { useAuth } from "@/lib/auth-context";
 import {
-  getMySubscription,
+  getMySubscriptionCached,
+  licenseFromResponse,
+  subscribeMyLicenseCache,
   type LicenseAccess,
   type TenantSubscription,
 } from "@/lib/subscription-api";
@@ -147,9 +149,9 @@ export function LicenseBanner() {
   const load = useCallback(async () => {
     if (!ready || !auth) return;
     try {
-      const result = await getMySubscription(auth);
+      const result = await getMySubscriptionCached(auth, { force: true });
       setAccess(result.access);
-      setSubscription(result.subscription);
+      setSubscription(licenseFromResponse(result));
     } catch {
       setAccess(null);
       setSubscription(null);
@@ -161,6 +163,14 @@ export function LicenseBanner() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!auth?.tenantId) return;
+    return subscribeMyLicenseCache((tenantId) => {
+      if (tenantId && tenantId !== auth.tenantId) return;
+      void load();
+    });
+  }, [auth?.tenantId, load]);
 
   if (!loaded || pathname.startsWith("/app/admin")) return null;
 

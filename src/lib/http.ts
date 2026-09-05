@@ -81,10 +81,16 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   if (!response.ok) {
     const rawMessage = payload.message ?? "İşlem tamamlanamadı.";
+    const code = payload.code;
+    const preserve403 =
+      typeof code === "string" &&
+      (code.startsWith("LICENSE_") ||
+        code === "FORBIDDEN_TENANT" ||
+        code === "ORGANIZATION_CONTEXT_REQUIRED");
     const safeMessage =
       response.status >= 500
         ? "İşlem sırasında beklenmeyen bir hata oluştu. Lütfen yeniden deneyin."
-        : response.status === 403
+        : response.status === 403 && !preserve403
           ? "Bu işlemi yapmaya yetkiniz bulunmuyor."
           : response.status === 401
             ? "Oturumunuz sona erdi. Lütfen yeniden giriş yapın."

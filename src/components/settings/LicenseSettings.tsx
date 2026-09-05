@@ -2,66 +2,65 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, IdCard } from "lucide-react";
+import {
+  CalendarDays,
+  ExternalLink,
+  IdCard,
+  ShieldAlert,
+  Timer,
+} from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import {
-  SettingsInfoGrid,
-  settingsUi,
-} from "@/components/settings/settings-ui";
+import { SettingsInfoGrid, settingsUi } from "@/components/settings/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useApiAuth } from "@/lib/active-site-context";
 import { ApiError } from "@/lib/http";
 import { formatDateTr, formatMoney } from "@/lib/money";
 import {
-  getMySubscription,
+  getMySubscriptionCached,
+  invalidateMyLicenseCache,
+  licenseFromResponse,
+  listMySubscriptionHistory,
   PLAN_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
+  subscribeMyLicenseCache,
   type LicenseAccess,
+  type MyLicenseResponse,
+  type TenantLicenseHistoryItem,
   type TenantSubscription,
 } from "@/lib/subscription-api";
-import { subscriptionTone } from "@/components/admin/labels";
 import { cn } from "@/lib/cn";
 
-function remainingTone(days: number, status: TenantSubscription["status"]): "ok" | "watch" | "urgent" | "expired" {
-  if (status === "EXPIRED" || status === "CANCELLED" || days < 0) return "expired";
-  if (status === "SUSPENDED") return "watch";
-  if (days <= 7) return "urgent";
-  if (days <= 30) return "watch";
-  return "ok";
+function statusDisplayLabel(sub: TenantSubscription): string {
+  if (sub.status === "EXPIRED" || sub.isExpired || sub.remainingDays < 0) return "Süresi doldu";
+  if (sub.status === "SUSPENDED") return "Askıya alındı";
+  if (sub.status === "CANCELLED") return "İptal edildi";
+  if (sub.remainingDays <= 7) return "Süresi yaklaşıyor";
+  return "Aktif";
 }
 
 function remainingMessage(sub: TenantSubscription): string {
-  if (sub.status === "EXPIRED" || sub.isExpired || sub.remainingDays < 0) {
-    return "Lisans süreniz dolmuş. Yenilemek için aşağıdaki kanalı kullanın.";
-  }
-  if (sub.status === "CANCELLED") return "Aboneliğiniz iptal edilmiş.";
-  if (sub.status === "SUSPENDED") {
-    return "Aboneliğiniz askıya alınmış. Kullanım kısıtlı olabilir.";
-  }
-  if (sub.readOnly) {
-    return "Organizasyon salt okunur modda. Düzenleme işlemleri kısıtlıdır.";
-  }
-  const days = Math.max(0, sub.remainingDays);
-  if (sub.plan === "DEMO") return `Demo sürenizin bitmesine ${days} gün kaldı.`;
-  return `Yıllık lisansınızın bitmesine ${days} gün kaldı.`;
+  if (sub.status === "EXPIRED" || sub.isExpired || sub.remainingDays < 0) return "Süresi doldu";
+  if (sub.status === "CANCELLED") return "İptal edildi";
+  if (sub.status === "SUSPENDED") return "Askıda";
+  return `${Math.max(0, sub.remainingDays)} gün kaldı`;
 }
 
-function organizationMessage(sub: TenantSubscription): string {
-  if (sub.status === "EXPIRED" || sub.isExpired || sub.remainingDays < 0) {
-    return "Bu organizasyonun müşteri aboneliğinin süresi dolmuş. Platform yöneticisi erişiminiz süresiz devam eder.";
+function resolveErrorMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) {
+    return "Lisans bilgileri şu anda alınamadı. Lütfen yeniden deneyin.";
   }
-  if (sub.status === "CANCELLED") {
-    return "Organizasyon aboneliği iptal edilmiş. Platform yöneticisi erişiminiz süresiz devam eder.";
+  if (err.status === 0) {
+    return "Sunucuya ulaşılamadı. Bağlantınızı kontrol ederek yeniden deneyin.";
   }
-  if (sub.status === "SUSPENDED") {
-    return "Organizasyon aboneliği askıya alınmış. Platform yöneticisi erişiminiz süresiz devam eder.";
+  if (err.code === "FORBIDDEN_TENANT" || err.status === 403) {
+    return err.message || "Bu organizasyonun lisans bilgilerini görüntüleme yetkiniz yok.";
   }
-  const days = Math.max(0, sub.remainingDays);
-  if (sub.plan === "DEMO") {
-    return `Organizasyon demo süresinin bitmesine ${days} gün kaldı. Bu süre sizin yönetim erişiminizi etkilemez.`;
+  if (err.code === "ORGANIZATION_CONTEXT_REQUIRED") {
+    return "Organizasyon oturumu bulunamadı. Yeniden giriş yapmayı deneyin.";
   }
-  return `Organizasyon yıllık lisansının bitmesine ${days} gün kaldı. Bu süre sizin yönetim erişiminizi etkilemez.`;
+  return err.message || "Lisans bilgileri şu anda alınamadı. Lütfen yeniden deneyin.";
 }
 
 function buildRenewalHref(
@@ -69,7 +68,7 @@ function buildRenewalHref(
   support?: { email?: string | null; renewalUrl?: string | null } | null,
 ): { href: string; label: string } | null {
   const url = support?.renewalUrl?.trim() || process.env.NEXT_PUBLIC_LICENSE_RENEWAL_URL?.trim();
-  if (url) return { href: url, label: "Lisansı Yenile" };
+  if (url) return { href: url, label: "Woontegra ile iletişime geç" };
 
   const whatsapp = (process.env.NEXT_PUBLIC_SALES_WHATSAPP ?? "").replace(/\D/g, "");
   const message = tenantName
@@ -78,125 +77,62 @@ function buildRenewalHref(
   if (whatsapp) {
     return {
       href: `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`,
-      label: "Lisansı Yenile",
+      label: "WhatsApp ile yazın",
     };
   }
 
   const email = (support?.email ?? process.env.NEXT_PUBLIC_SUPPORT_EMAIL)?.trim();
   if (email) {
-    const subject = "Lisans yenileme";
     return {
-      href: `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`,
-      label: "Lisansı Yenile",
+      href: `mailto:${email}?subject=${encodeURIComponent("Lisans yenileme")}&body=${encodeURIComponent(message)}`,
+      label: "E-posta gönder",
     };
   }
-
   return null;
 }
 
-function OrganizationSubscriptionSummary({
-  subscription,
-  forPlatformAdmin,
-  orgName,
-  licenseScope,
-  supportEmail,
+function SummaryTile({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+  icon: Icon,
 }: {
-  subscription: TenantSubscription;
-  forPlatformAdmin: boolean;
-  orgName?: string;
-  licenseScope?: string | null;
-  supportEmail?: string | null;
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "neutral" | "teal" | "green" | "amber" | "danger";
+  icon?: typeof IdCard;
 }) {
-  const tone = remainingTone(subscription.remainingDays, subscription.status);
-  const remainingValue =
-    subscription.isExpired || subscription.remainingDays < 0
-      ? "Süresi doldu"
-      : `${Math.max(0, subscription.remainingDays)} gün`;
-  const hasPrice =
-    subscription.plan === "ANNUAL" &&
-    (subscription.netPrice != null || subscription.grossPrice != null);
+  const tones = {
+    neutral: "border-line/80 bg-white",
+    teal: "border-teal-200/70 bg-teal-50/40",
+    green: "border-emerald-200/70 bg-emerald-50/40",
+    amber: "border-amber-200/70 bg-amber-50/40",
+    danger: "border-rose-200/70 bg-rose-50/40",
+  } as const;
+  const iconTone = {
+    neutral: "bg-slate-100 text-slate-600",
+    teal: "bg-teal-100 text-teal-700",
+    green: "bg-emerald-100 text-emerald-700",
+    amber: "bg-amber-100 text-amber-800",
+    danger: "bg-rose-100 text-rose-700",
+  } as const;
 
   return (
-    <div className="space-y-3">
-      <SettingsInfoGrid
-        columns={4}
-        items={[
-          { label: "Organizasyon", value: orgName || "—" },
-          { label: "Paket", value: PLAN_LABELS[subscription.plan] },
-          { label: "Durum", value: SUBSCRIPTION_STATUS_LABELS[subscription.status] },
-          {
-            label: "Bitiş tarihi",
-            value: formatDateTr(subscription.endsAt),
-            hint: <span className={settingsUi.help}>Başlangıç {formatDateTr(subscription.startsAt)}</span>,
-          },
-          {
-            label: "Kalan gün",
-            value: remainingValue,
-          },
-          {
-            label: "Erişim",
-            value: subscription.readOnly ? "Salt okunur" : "Tam erişim",
-          },
-          ...(hasPrice
-            ? [
-                {
-                  label: "Net tutar",
-                  value: formatMoney(subscription.netPrice),
-                },
-                {
-                  label: "KDV dahil",
-                  value: formatMoney(subscription.grossPrice),
-                  hint:
-                    subscription.vatRate != null ? (
-                      <span className={settingsUi.help}>
-                        KDV %{subscription.vatRate}
-                        {subscription.vatAmount != null ? ` · ${formatMoney(subscription.vatAmount)}` : ""}
-                      </span>
-                    ) : undefined,
-                },
-              ]
-            : []),
-        ]}
-      />
-
-      <p className={settingsUi.help}>
-        {licenseScope ||
-          "Bu lisans organizasyonunuzdaki bütün kullanıcı ve siteleri kapsar."}
-      </p>
-
-      <div
-        className={cn(
-          "rounded-lg border px-3 py-2.5",
-          tone === "expired"
-            ? "border-danger/30 bg-danger-subtle/30"
-            : tone === "urgent"
-              ? "border-warning/40 bg-warning-subtle/40"
-              : tone === "watch"
-                ? "border-warning/25 bg-warning-subtle/20"
-                : "border-line bg-canvas/40",
-        )}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <p className={settingsUi.help}>
-            {forPlatformAdmin ? "Organizasyon özeti" : "Lisans özeti"}
-          </p>
-          <StatusBadge
-            label={SUBSCRIPTION_STATUS_LABELS[subscription.status]}
-            tone={subscriptionTone(subscription.status, subscription.plan)}
-          />
+    <div className={cn("min-w-0 rounded-xl border px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]", tones[tone])}>
+      <div className="flex items-start gap-2.5">
+        {Icon ? (
+          <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[10px]", iconTone[tone])}>
+            <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <p className="text-[11px] text-muted">{label}</p>
+          <p className="mt-0.5 break-words text-[15px] font-semibold tracking-tight text-ink">{value}</p>
+          {hint ? <p className="mt-0.5 text-[11px] text-muted">{hint}</p> : null}
         </div>
-        <p className="mt-1 text-[14px] font-semibold leading-[1.25] text-ink">{remainingValue}</p>
-        <p className={`${settingsUi.help} mt-1`}>
-          {forPlatformAdmin ? organizationMessage(subscription) : remainingMessage(subscription)}
-        </p>
       </div>
-
-      {supportEmail ? (
-        <div className="rounded-lg border border-line px-3 py-2.5">
-          <p className={settingsUi.help}>Destek</p>
-          <p className="mt-0.5 text-[13px] text-ink">{supportEmail}</p>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -204,165 +140,259 @@ function OrganizationSubscriptionSummary({
 export function LicenseSettings() {
   const { user } = useAuth();
   const auth = useApiAuth({ requireSite: false });
-  const [access, setAccess] = useState<LicenseAccess | null>(null);
-  const [subscription, setSubscription] = useState<TenantSubscription | null | undefined>(undefined);
-  const [orgMeta, setOrgMeta] = useState<{
-    name?: string;
-    licenseScope?: string;
-    support?: { email: string | null; renewalUrl: string | null };
-  }>({});
+  const [payload, setPayload] = useState<MyLicenseResponse | null>(null);
+  const [history, setHistory] = useState<TenantLicenseHistoryItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const result = await getMySubscription(auth);
-      setAccess(result.access);
-      setSubscription(result.subscription);
-      setOrgMeta({
-        name: result.organization?.name,
-        licenseScope: result.licenseScope,
-        support: result.support,
-      });
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : "Lisans bilgileri yüklenemedi.";
-      setError(
-        message === "Aktif site seçilmedi."
-          ? "Lisans bilgileri yüklenemedi. Organizasyon oturumunu kontrol edin."
-          : message,
-      );
-      setAccess(null);
-      setSubscription(undefined);
-    } finally {
-      setLoading(false);
-    }
-  }, [auth]);
+  const load = useCallback(
+    async (force = false) => {
+      if (!auth) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError("");
+      try {
+        const result = await getMySubscriptionCached(auth, { force });
+        setPayload(result);
+        try {
+          const hist = await listMySubscriptionHistory(auth, 12);
+          setHistory(hist.items);
+        } catch {
+          setHistory([]);
+        }
+      } catch (err) {
+        setError(resolveErrorMessage(err));
+        setPayload(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [auth],
+  );
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, [load]);
 
-  const orgName = orgMeta.name || user.tenantName;
+  useEffect(() => {
+    if (!auth?.tenantId) return;
+    return subscribeMyLicenseCache((tenantId) => {
+      if (tenantId && tenantId !== auth.tenantId) return;
+      void load(true);
+    });
+  }, [auth?.tenantId, load]);
+
+  const access: LicenseAccess | null = payload?.access ?? null;
+  const subscription = payload ? licenseFromResponse(payload) : null;
+  const orgName = payload?.organization?.name || user.tenantName;
   const renewal = useMemo(
-    () => buildRenewalHref(orgName, orgMeta.support ?? null),
-    [orgName, orgMeta.support],
+    () => buildRenewalHref(orgName, payload?.support ?? null),
+    [orgName, payload?.support],
   );
-  const isPlatformAdmin = Boolean(access?.isPlatformAdmin);
+  const isPlatformAdmin = Boolean(access?.isPlatformAdmin || user.isPlatformAdmin);
+  const noLicense = Boolean(payload && (payload.state === "NO_LICENSE" || !subscription));
+
+  const planTone =
+    !subscription
+      ? "neutral"
+      : subscription.status === "EXPIRED" || subscription.isExpired
+        ? "danger"
+        : subscription.status === "SUSPENDED" || subscription.status === "CANCELLED"
+          ? "amber"
+          : subscription.plan === "ANNUAL"
+            ? "green"
+            : "teal";
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className={settingsUi.help}>
+            Lisans organizasyonunuza aittir ve seçili siteye bağlı değildir.
+          </p>
+        </div>
+        <span className="inline-flex items-center rounded-md border border-line bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-muted">
+          Tüm organizasyon için
+        </span>
+      </div>
+
       {loading ? <p className={settingsUi.help}>Lisans bilgileri yükleniyor…</p> : null}
-      {error ? <p className="text-[12px] text-danger">{error}</p> : null}
 
-      {!loading && !error && isPlatformAdmin ? (
-        <>
-          <div
-            className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-[12px] leading-[1.4] text-ink"
-            role="status"
-          >
-            Bu hesap platform yöneticisi erişimiyle kullanılıyor. Aşağıdaki abonelik kaydı bağlı
-            organizasyonun müşteri lisansıdır; sizin yönetim erişiminiz abonelik süresinden etkilenmez.
-          </div>
-          <SettingsInfoGrid
-            columns={4}
-            items={[
-              { label: "Hesap türü", value: "Platform Yöneticisi" },
-              { label: "Yönetim erişimi", value: "Süresiz" },
-              { label: "Lisans durumu", value: "Muaf" },
-            ]}
-          />
-
-          <div className="border-t border-line/70 pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className={settingsUi.sectionTitle}>Organizasyon aboneliği</h3>
-                <p className={settingsUi.help}>
-                  Bu kayıt bağlı tenant’ın müşteri lisansıdır; sizin yönetim erişiminiz değildir.
-                </p>
-              </div>
-              <Link href="/app/admin/abonelikler" className={settingsUi.btnSm}>
-                Lisans yönetimine git
-              </Link>
-            </div>
-            <div className="mt-2.5">
-              {subscription ? (
-                <OrganizationSubscriptionSummary
-                  subscription={subscription}
-                  forPlatformAdmin
-                  orgName={orgName}
-                  licenseScope={orgMeta.licenseScope}
-                  supportEmail={orgMeta.support?.email}
-                />
-              ) : (
-                <EmptyState
-                  icon={IdCard}
-                  title="Bu organizasyon için müşteri aboneliği tanımlanmamış"
-                  description="Platform yöneticisi erişiminiz süresiz devam eder."
-                  action={
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      <Link href="/app/admin/tenantlar" className={settingsUi.btnSm}>
-                        Tenantlara Git
-                      </Link>
-                      <Link href="/app/admin/abonelikler" className={settingsUi.btnSm}>
-                        Aboneliklere Git
-                      </Link>
-                    </div>
-                  }
-                  compact
-                  className="border-0 bg-transparent px-0 py-3"
-                />
-              )}
-            </div>
-          </div>
-        </>
+      {error ? (
+        <div className="rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2.5">
+          <p className="text-[12px] text-rose-800">{error}</p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => void load(true)}>
+            Yeniden Dene
+          </Button>
+        </div>
       ) : null}
 
-      {!loading && !error && !isPlatformAdmin ? (
-        <>
-          {subscription === null ? (
-            <EmptyState
-              icon={IdCard}
-              title="Bu organizasyon için henüz lisans tanımlanmamış"
-              description="Satış veya destek ekibiniz bir abonelik tanımladığında paket, durum ve süre bilgileri burada görünür."
-              compact
-              className="border-0 bg-transparent px-0 py-3"
-            />
-          ) : null}
+      {!loading && !error && isPlatformAdmin ? (
+        <div
+          className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-[12px] leading-[1.4] text-ink"
+          role="status"
+        >
+          Platform yöneticisi olarak görüntülüyorsunuz. Aşağıdaki kayıt bağlı organizasyonun müşteri
+          lisansıdır; yönetim erişiminiz abonelik süresinden etkilenmez.
+        </div>
+      ) : null}
 
-          {subscription ? (
-            <OrganizationSubscriptionSummary
-              subscription={subscription}
-              forPlatformAdmin={false}
-              orgName={orgName}
-              licenseScope={orgMeta.licenseScope}
-              supportEmail={orgMeta.support?.email}
-            />
-          ) : null}
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {renewal ? (
-              <a href={renewal.href} target="_blank" rel="noreferrer" className={settingsUi.btnPrimary}>
-                <ExternalLink className="size-3.5" aria-hidden />
+      {!loading && !error && noLicense ? (
+        <EmptyState
+          title="Lisans tanımlanmamış"
+          description="Organizasyonunuz için henüz bir lisans tanımlanmamış. Lisans işlemleri için Woontegra ile iletişime geçin."
+          icon={ShieldAlert}
+          action={
+            renewal ? (
+              <a href={renewal.href} target="_blank" rel="noreferrer" className={settingsUi.btnSm}>
                 {renewal.label}
+                <ExternalLink className="size-3.5" aria-hidden />
               </a>
-            ) : (
-              <button type="button" className={settingsUi.btnPrimary} disabled>
-                Lisansı Yenile
-              </button>
-            )}
-            <p className={settingsUi.help}>
-              {renewal
-                ? "Ödeme bu ekranda alınmaz; satış veya destek kanalına yönlendirilirsiniz."
-                : "Lisans yenileme iletişim bilgisi tanımlanmamış."}
-            </p>
+            ) : undefined
+          }
+        />
+      ) : null}
+
+      {!loading && !error && subscription ? (
+        <>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryTile
+              label="Lisans"
+              value={PLAN_LABELS[subscription.plan]}
+              hint={subscription.plan === "DEMO" ? "Ücretsiz demo" : "Yıllık abonelik"}
+              tone={planTone}
+              icon={IdCard}
+            />
+            <SummaryTile
+              label="Durum"
+              value={statusDisplayLabel(subscription)}
+              hint={SUBSCRIPTION_STATUS_LABELS[subscription.status]}
+              tone={planTone}
+              icon={ShieldAlert}
+            />
+            <SummaryTile
+              label="Kalan süre"
+              value={remainingMessage(subscription)}
+              hint={subscription.readOnly ? "Salt okunur" : "Tam erişim"}
+              tone={
+                subscription.remainingDays <= 0 || subscription.isExpired
+                  ? "danger"
+                  : subscription.remainingDays <= 7
+                    ? "amber"
+                    : planTone
+              }
+              icon={Timer}
+            />
+            <SummaryTile
+              label="Bitiş tarihi"
+              value={formatDateTr(subscription.endsAt)}
+              hint={`Başlangıç ${formatDateTr(subscription.startsAt)}`}
+              tone="neutral"
+              icon={CalendarDays}
+            />
           </div>
+
+          <div className="rounded-xl border border-line/80 bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+            <h3 className="text-[13px] font-semibold text-ink">Lisans detayı</h3>
+            <p className={cn(settingsUi.help, "mt-0.5")}>
+              {payload?.licenseScope ??
+                "Bu lisans organizasyonunuzdaki tüm kullanıcıları ve siteleri kapsar."}
+            </p>
+            <div className="mt-3">
+              <SettingsInfoGrid
+                columns={3}
+                items={[
+                  { label: "Organizasyon", value: orgName || "—" },
+                  { label: "Başlangıç", value: formatDateTr(subscription.startsAt) },
+                  { label: "Bitiş", value: formatDateTr(subscription.endsAt) },
+                  {
+                    label: "Kapsam",
+                    value: "Tüm kullanıcılar ve siteler",
+                  },
+                  {
+                    label: "Kullanım",
+                    value:
+                      payload?.usage != null
+                        ? `${payload.usage.siteCount} site · ${payload.usage.userCount} kullanıcı`
+                        : "—",
+                  },
+                  {
+                    label: "Erişim",
+                    value: subscription.readOnly ? "Salt okunur" : "Tam erişim",
+                  },
+                  ...(subscription.plan === "ANNUAL"
+                    ? [
+                        { label: "Yıllık net", value: formatMoney(subscription.netPrice) },
+                        {
+                          label: "KDV",
+                          value: formatMoney(subscription.vatAmount),
+                          hint:
+                            subscription.vatRate != null ? (
+                              <span className={settingsUi.help}>%{subscription.vatRate}</span>
+                            ) : undefined,
+                        },
+                        { label: "Toplam", value: formatMoney(subscription.grossPrice) },
+                      ]
+                    : [
+                        { label: "Ücret", value: "Ücretsiz demo" },
+                        { label: "Para birimi", value: subscription.currency ?? "TRY" },
+                      ]),
+                ]}
+              />
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line/70 pt-3">
+              <StatusBadge active={!subscription.readOnly && subscription.status === "ACTIVE"} />
+              {renewal ? (
+                <a href={renewal.href} target="_blank" rel="noreferrer" className={settingsUi.btnSm}>
+                  {renewal.label}
+                  <ExternalLink className="size-3.5" aria-hidden />
+                </a>
+              ) : (
+                <p className={settingsUi.help}>Yenileme için Woontegra ile iletişime geçin.</p>
+              )}
+              {isPlatformAdmin ? (
+                <Link href="/app/admin/abonelikler" className={settingsUi.btnSm}>
+                  Admin Lisans Yönetimine Git
+                </Link>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  invalidateMyLicenseCache(auth?.tenantId);
+                  void load(true);
+                }}
+              >
+                Yenile
+              </Button>
+            </div>
+          </div>
+
+          {history.length > 0 ? (
+            <div className="rounded-xl border border-line/80 bg-white px-4 py-3.5">
+              <h3 className="text-[13px] font-semibold text-ink">Lisans geçmişi</h3>
+              <p className={cn(settingsUi.help, "mt-0.5")}>Organizasyon lisansındaki son değişiklikler</p>
+              <ul className="mt-2.5 divide-y divide-line/70">
+                {history.map((item) => (
+                  <li key={item.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                    <div>
+                      <p className="text-[12px] font-medium text-ink">{item.label}</p>
+                      {item.newEndsAt ? (
+                        <p className="text-[11px] text-muted">
+                          Yeni bitiş: {formatDateTr(item.newEndsAt)}
+                          {item.previousEndsAt ? ` · önceki ${formatDateTr(item.previousEndsAt)}` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p className="text-[11px] text-muted">{formatDateTr(item.createdAt)}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>

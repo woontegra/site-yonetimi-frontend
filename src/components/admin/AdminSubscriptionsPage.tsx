@@ -36,6 +36,12 @@ import {
 } from "@/lib/admin-api";
 import { ApiError } from "@/lib/http";
 import { formatDateTr, formatMoney } from "@/lib/money";
+import { invalidateMyLicenseCache } from "@/lib/subscription-api";
+import {
+  previewAddCalendarDaysEndOfDay,
+  previewExtendBaseIso,
+  previewRemainingCalendarDays,
+} from "@/lib/license-dates";
 
 const PER_PAGE = 20;
 const ANNUAL_NET = 4000;
@@ -53,13 +59,13 @@ type FilterKey =
   | "none";
 
 type PendingAction =
-  | { type: "extend"; tenantId: string; days: number }
-  | { type: "extendCustom"; tenantId: string }
-  | { type: "convert"; tenantId: string }
-  | { type: "renew"; tenantId: string }
-  | { type: "suspend"; tenantId: string }
-  | { type: "reactivate"; tenantId: string }
-  | { type: "cancel"; tenantId: string };
+  | { type: "extend"; tenantId: string; days: number; endsAt: string; orgName: string; remainingDays: number }
+  | { type: "extendCustom"; tenantId: string; endsAt: string; orgName: string; remainingDays: number }
+  | { type: "convert"; tenantId: string; orgName: string }
+  | { type: "renew"; tenantId: string; orgName: string }
+  | { type: "suspend"; tenantId: string; orgName: string }
+  | { type: "reactivate"; tenantId: string; orgName: string }
+  | { type: "cancel"; tenantId: string; orgName: string };
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "", label: "Tümü" },
@@ -159,7 +165,11 @@ export function AdminSubscriptionsPage() {
       const r = reason.trim();
       if (action.type === "extend") {
         await extendAdminDemo(auth, action.tenantId, { days: action.days, reason: r });
-        showToast(`Demo ${action.days} gün uzatıldı.`);
+        const base = previewExtendBaseIso(action.endsAt);
+        const nextEnds = previewAddCalendarDaysEndOfDay(base, action.days);
+        showToast(
+          `Demo süresine ${action.days} gün eklendi. Yeni bitiş tarihi: ${formatDateTr(nextEnds.toISOString())}.`,
+        );
       } else if (action.type === "extendCustom") {
         const days = Number(customDays);
         if (!Number.isInteger(days) || days < 1) {
@@ -168,7 +178,9 @@ export function AdminSubscriptionsPage() {
           return;
         }
         await extendAdminDemo(auth, action.tenantId, { days, reason: r });
-        showToast(`Demo ${days} gün uzatıldı.`);
+        const base = previewExtendBaseIso(action.endsAt);
+        const nextEnds = previewAddCalendarDaysEndOfDay(base, days);
+        showToast(`Demo süresine ${days} gün eklendi. Yeni bitiş tarihi: ${formatDateTr(nextEnds.toISOString())}.`);
       } else if (action.type === "convert") {
         await convertAdminAnnual(auth, action.tenantId, {
           reason: r,
@@ -192,6 +204,7 @@ export function AdminSubscriptionsPage() {
         await cancelAdminSubscription(auth, action.tenantId, r);
         showToast("Abonelik iptal edildi.");
       }
+      invalidateMyLicenseCache(action.tenantId);
       setAction(null);
       await Promise.all([load(), loadSummary()]);
     } catch (err) {
@@ -297,21 +310,113 @@ export function AdminSubscriptionsPage() {
                   </TD>
                   <TD>
                     <div className="flex flex-wrap gap-1">
-                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "extend", tenantId: item.tenant.id, days: 3 })}>+3</Button>
-                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "extend", tenantId: item.tenant.id, days: 7 })}>+7</Button>
-                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "extendCustom", tenantId: item.tenant.id })}>Özel</Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() =>
+                          openAction({
+                            type: "extend",
+                            tenantId: item.tenant.id,
+                            days: 3,
+                            endsAt: item.endsAt,
+                            orgName: item.tenant.name,
+                            remainingDays: item.remainingDays,
+                          })
+                        }
+                      >
+                        +3
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() =>
+                          openAction({
+                            type: "extend",
+                            tenantId: item.tenant.id,
+                            days: 7,
+                            endsAt: item.endsAt,
+                            orgName: item.tenant.name,
+                            remainingDays: item.remainingDays,
+                          })
+                        }
+                      >
+                        +7
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() =>
+                          openAction({
+                            type: "extendCustom",
+                            tenantId: item.tenant.id,
+                            endsAt: item.endsAt,
+                            orgName: item.tenant.name,
+                            remainingDays: item.remainingDays,
+                          })
+                        }
+                      >
+                        Özel
+                      </Button>
                       {item.plan !== "ANNUAL" ? (
-                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "convert", tenantId: item.tenant.id })}>Yıllık</Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={pending}
+                          onClick={() =>
+                            openAction({ type: "convert", tenantId: item.tenant.id, orgName: item.tenant.name })
+                          }
+                        >
+                          Yıllık
+                        </Button>
                       ) : (
-                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "renew", tenantId: item.tenant.id })}>Yenile</Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={pending}
+                          onClick={() =>
+                            openAction({ type: "renew", tenantId: item.tenant.id, orgName: item.tenant.name })
+                          }
+                        >
+                          Yenile
+                        </Button>
                       )}
                       {item.status === "SUSPENDED" ? (
-                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "reactivate", tenantId: item.tenant.id })}>Aktif et</Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={pending}
+                          onClick={() =>
+                            openAction({ type: "reactivate", tenantId: item.tenant.id, orgName: item.tenant.name })
+                          }
+                        >
+                          Aktif et
+                        </Button>
                       ) : item.status !== "CANCELLED" ? (
-                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "suspend", tenantId: item.tenant.id })}>Askıya al</Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={pending}
+                          onClick={() =>
+                            openAction({ type: "suspend", tenantId: item.tenant.id, orgName: item.tenant.name })
+                          }
+                        >
+                          Askıya al
+                        </Button>
                       ) : null}
                       {item.status !== "CANCELLED" ? (
-                        <Button size="sm" variant="secondary" disabled={pending} onClick={() => openAction({ type: "cancel", tenantId: item.tenant.id })}>İptal</Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={pending}
+                          onClick={() =>
+                            openAction({ type: "cancel", tenantId: item.tenant.id, orgName: item.tenant.name })
+                          }
+                        >
+                          İptal
+                        </Button>
                       ) : null}
                     </div>
                   </TD>
@@ -338,6 +443,46 @@ export function AdminSubscriptionsPage() {
         }
       >
         <div className="space-y-3">
+          {action && "orgName" in action ? (
+            <p className="rounded-md border border-line bg-canvas/50 px-3 py-2 text-[12px] text-ink">
+              <span className="font-medium">{action.orgName}</span>
+              {action.type === "extend" || action.type === "extendCustom" ? (
+                <>
+                  <br />
+                  Mevcut bitiş: {formatDateTr(action.endsAt)} · Kalan: {Math.max(0, action.remainingDays)} gün
+                  <br />
+                  Eklenecek:{" "}
+                  {action.type === "extend"
+                    ? `${action.days} gün`
+                    : `${Number(customDays) || "—"} gün`}
+                  {(action.type === "extend" ||
+                    (action.type === "extendCustom" && Number.isFinite(Number(customDays)) && Number(customDays) > 0)) && (
+                    <>
+                      <br />
+                      Yeni bitiş:{" "}
+                      {formatDateTr(
+                        previewAddCalendarDaysEndOfDay(
+                          previewExtendBaseIso(action.endsAt),
+                          action.type === "extend" ? action.days : Number(customDays),
+                        ).toISOString(),
+                      )}{" "}
+                      · Yeni kalan:{" "}
+                      {Math.max(
+                        0,
+                        previewRemainingCalendarDays(
+                          previewAddCalendarDaysEndOfDay(
+                            previewExtendBaseIso(action.endsAt),
+                            action.type === "extend" ? action.days : Number(customDays),
+                          ),
+                        ),
+                      )}{" "}
+                      gün
+                    </>
+                  )}
+                </>
+              ) : null}
+            </p>
+          ) : null}
           {action?.type === "extendCustom" ? (
             <FormField label="Gün sayısı" required>
               <Input type="number" min={1} max={365} value={customDays} onChange={(e) => setCustomDays(e.target.value)} />

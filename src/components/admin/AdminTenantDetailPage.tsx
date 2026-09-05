@@ -76,6 +76,12 @@ import {
   type AdminTenantDetail,
 } from "@/lib/admin-api";
 import { ApiError } from "@/lib/http";
+import {
+  previewAddCalendarDaysEndOfDay,
+  previewExtendBaseIso,
+  previewRemainingCalendarDays,
+} from "@/lib/license-dates";
+import { invalidateMyLicenseCache } from "@/lib/subscription-api";
 import { formatDateTr } from "@/lib/money";
 
 type Tab = "genel" | "siteler" | "kullanicilar" | "abonelik" | "entegrasyonlar" | "gecmis" | "notlar";
@@ -117,14 +123,6 @@ type TenantUserRow = {
 function dash(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
-}
-
-function addDaysIso(iso: string | undefined, days: number): string | null {
-  const base = iso ? new Date(iso) : new Date();
-  if (Number.isNaN(base.getTime())) return null;
-  const next = new Date(base);
-  next.setDate(next.getDate() + days);
-  return next.toISOString();
 }
 
 function ModalInfoBox({ label, value }: { label: string; value: string }) {
@@ -230,6 +228,7 @@ export function AdminTenantDetailPage() {
       await action();
       showToast(message);
       setQuickModal(null);
+      invalidateMyLicenseCache(id);
       await load();
     } catch (err) {
       toastError(err, "İşlem tamamlanamadı.");
@@ -241,10 +240,17 @@ export function AdminTenantDetailPage() {
 
   const sub = tenant?.subscription ?? null;
   const trialDaysNum = Number(trialDays);
-  const trialPreview = useMemo(
-    () => (Number.isFinite(trialDaysNum) && trialDaysNum > 0 ? addDaysIso(undefined, trialDaysNum) : null),
-    [trialDaysNum],
-  );
+  const extendPreview = useMemo(() => {
+    if (!Number.isFinite(trialDaysNum) || trialDaysNum < 1) return null;
+    const base = previewExtendBaseIso(sub?.endsAt);
+    const newEnds = previewAddCalendarDaysEndOfDay(base, trialDaysNum);
+    return {
+      newEndsAt: newEnds,
+      newRemaining: previewRemainingCalendarDays(newEnds),
+      currentEndsAt: sub?.endsAt ?? null,
+      currentRemaining: sub?.remainingDays ?? null,
+    };
+  }, [trialDaysNum, sub?.endsAt, sub?.remainingDays]);
 
   const interventionReasons = useMemo(
     () => (tenant ? buildInterventionReasons(tenant) : []),
@@ -854,7 +860,9 @@ export function AdminTenantDetailPage() {
               onClick={() =>
                 void run(
                   () => extendAdminDemo(auth!, id, { days: trialDaysNum, reason: licenseReason.trim() }),
-                  "Demo süresi güncellendi.",
+                  extendPreview
+                    ? `Demo süresine ${trialDaysNum} gün eklendi. Yeni bitiş tarihi: ${formatDateTr(extendPreview.newEndsAt.toISOString())}.`
+                    : "Demo süresi güncellendi.",
                 )
               }
             >
@@ -864,6 +872,19 @@ export function AdminTenantDetailPage() {
         }
       >
         <div className="grid gap-3">
+          <ModalInfoBox label="Organizasyon" value={tenant.name} />
+          <ModalInfoBox label="Lisans türü" value={sub ? PLAN_LABELS[sub.plan] ?? sub.plan : "—"} />
+          <ModalInfoBox label="Mevcut başlangıç" value={sub ? formatDateTr(sub.startsAt) : "—"} />
+          <ModalInfoBox
+            label="Mevcut bitiş"
+            value={extendPreview?.currentEndsAt ? formatDateTr(extendPreview.currentEndsAt) : "—"}
+          />
+          <ModalInfoBox
+            label="Mevcut kalan gün"
+            value={
+              extendPreview?.currentRemaining != null ? String(Math.max(0, extendPreview.currentRemaining)) : "—"
+            }
+          />
           <label className="text-sm text-ink">
             Eklenecek gün sayısı
             <Input
@@ -885,8 +906,14 @@ export function AdminTenantDetailPage() {
               onChange={(e) => setLicenseReason(e.target.value)}
             />
           </label>
-          <ModalInfoBox label="Mevcut bitiş tarihi" value={sub ? formatDateTr(sub.endsAt) : "—"} />
-          <ModalInfoBox label="İşlem sonrası yeni bitiş tarihi" value={trialPreview ? formatDateTr(trialPreview) : "—"} />
+          <ModalInfoBox
+            label="Yeni bitiş tarihi"
+            value={extendPreview ? formatDateTr(extendPreview.newEndsAt.toISOString()) : "—"}
+          />
+          <ModalInfoBox
+            label="Yeni kalan süre"
+            value={extendPreview ? `${Math.max(0, extendPreview.newRemaining)} gün` : "—"}
+          />
         </div>
       </Modal>
 

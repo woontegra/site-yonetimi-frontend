@@ -82,6 +82,7 @@ import {
 } from "@/lib/admin-api";
 import { ApiError } from "@/lib/http";
 import { formatDateTr } from "@/lib/money";
+import { invalidateMyLicenseCache } from "@/lib/subscription-api";
 
 type Tab =
   | "genel"
@@ -319,6 +320,7 @@ export function AdminUserDetailPage() {
       showToast(message);
       setModal(null);
       setConfirmActivate(false);
+      if (user?.tenant?.id) invalidateMyLicenseCache(user.tenant.id);
       await load();
       if (tab === "islem") await loadActivity();
       if (tab === "iletisim") await loadComms();
